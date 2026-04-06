@@ -60,6 +60,9 @@ class BotState:
         # Watcher alerts log  (deque, newest first)
         self._alerts: Deque[Dict] = deque(maxlen=MAX_ALERTS)
 
+        # Analyzed trades log (deque, newest first)
+        self._trade_analyses: Deque[Dict] = deque(maxlen=MAX_TRADES)
+
         # Scan log (newest first)
         self._scan_log: Deque[Dict] = deque(maxlen=60)
         self._last_scan_broadcast: float = 0.0
@@ -246,6 +249,12 @@ class BotState:
             })
         await self._broadcast()
 
+    # ── Trade analysis events ──────────────────────────────────────────────────
+    async def push_trade_analysis(self, analysis: Dict[str, Any]) -> None:
+        async with self._lock:
+            self._trade_analyses.appendleft(analysis)
+        await self._broadcast()
+
     # ── Scan log events ───────────────────────────────────────────────────────
     async def push_scan_event(self, symbol: str, timeframe: str, price: float) -> None:
         async with self._lock:
@@ -376,6 +385,7 @@ class BotState:
                 "trades":    list(self._trades),
                 "ai_log":    list(self._ai_log),
                 "alerts":    list(self._alerts),
+                "trade_analyses": list(self._trade_analyses),
                 "scan_log":  list(self._scan_log),
                 "stats":     dict(self.stats),
                 "sim": {

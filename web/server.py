@@ -38,6 +38,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from web.state import bot_state
+from agents.post_mortem import load_analysis, load_strategy_data, list_all_strategies
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +101,24 @@ async def get_stats():
     snap = await bot_state.snapshot()
     return snap["stats"]
 
+
+@app.get("/api/trade-analysis/{trade_id}")
+async def api_get_analysis(trade_id: str):
+    data = load_analysis(trade_id)
+    if data is None:
+        return JSONResponse(status_code=404, content={"error": "Analysis not found"})
+    return data
+
+
+@app.get("/api/strategy-lessons/{strategy}")
+async def api_get_strategy_lessons(strategy: str):
+    data = load_strategy_data(strategy)
+    return data
+
+
+@app.get("/api/strategies")
+async def api_list_strategies():
+    return list_all_strategies()
 
 # ── WebSocket endpoint ────────────────────────────────────────────────────────
 

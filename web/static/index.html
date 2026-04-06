@@ -139,6 +139,29 @@
     .empty-icon { font-size: 32px; margin-bottom: 10px; }
     .empty-msg { font-size: 13px; }
 
+    /* Modals */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal-content { background: var(--surface); width: 100%; max-width: 600px; max-height: 90vh; border-radius: var(--radius); box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    .modal-close { cursor: pointer; background: none; border: none; color: var(--muted); padding: 4px; border-radius: 4px; font-size: 16px; }
+    .modal-close:hover { background: var(--border); color: var(--text); }
+    .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+    /* Analysis specific */
+    .analysis-section { margin-bottom: 20px; }
+    .analysis-section h4 { font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+    .analysis-box { background: var(--bg); border: 1px solid var(--border); padding: 12px; border-radius: 6px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+    .analysis-rule { background: var(--blue-bg); border: 1px solid var(--accent); padding: 12px; border-radius: 6px; font-size: 13px; font-weight: 500; display: flex; gap: 10px; align-items: flex-start; }
+
+    /* Strategy Tabs */
+    .tabs-nav { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--bg); overflow-x: auto; }
+    .tab-btn { padding: 12px 16px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 500; font-size: 13px; cursor: pointer; white-space: nowrap; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .strategy-rule-item { padding: 12px 20px; border-bottom: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px; }
+    .strategy-rule-item:last-child { border-bottom: none; }
+
     /* Responsive */
     @media (max-width: 900px) {
       .panels { grid-template-columns: 1fr; }
@@ -304,7 +327,7 @@ function PositionsPanel({ positions }) {
 }
 
 // ── Trade History Panel ───────────────────────────────────────────────────
-function TradeHistoryPanel({ trades }) {
+function TradeHistoryPanel({ trades, onTradeClick }) {
   if (!trades || trades.length === 0) {
     return (
       <div className="panel">
@@ -343,8 +366,10 @@ function TradeHistoryPanel({ trades }) {
             </tr>
           </thead>
           <tbody>
-            {trades.map((t, i) => (
-              <tr key={i}>
+            {trades.map((t, i) => {
+              const isLoss = t.pnl_pct < 0 || t.reason === 'SL';
+              return (
+              <tr key={i} onClick={() => isLoss && onTradeClick && onTradeClick(t)} style={{cursor: isLoss ? 'pointer' : 'default', background: isLoss ? 'var(--red-bg)' : ''}}>
                 <td><strong className="mono">{t.symbol.replace('/USDT','')}</strong><span style={{color:'var(--muted)',fontSize:'11px'}}>/USDT</span></td>
                 <td><StrategyBadge strategy={t.strategy} /></td>
                 <td className="mono">{fmt(t.entry)}</td>
@@ -359,7 +384,8 @@ function TradeHistoryPanel({ trades }) {
                 </td>
                 <td style={{color:'var(--muted)'}}>{fmtTime(t.closed_at)}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -569,7 +595,7 @@ function fmtGbp(n) {
   return sign + '£' + Math.abs(v).toFixed(2);
 }
 
-function SimulatePanel({ sim }) {
+function SimulatePanel({ sim, onTradeClick }) {
   const openTrades = sim?.open || [];
   const closedTrades = sim?.trades || [];
   const totalCount = openTrades.length + closedTrades.length;
@@ -629,7 +655,7 @@ function SimulatePanel({ sim }) {
             {closedTrades.map((t, i) => {
               const isWin = t.pnl_pct >= 0;
               return (
-                <div className="sim-row" key={'c-'+i}>
+                <div className="sim-row" key={'c-'+i} onClick={() => !isWin && onTradeClick && onTradeClick(t)} style={{cursor: !isWin ? 'pointer' : 'default', background: !isWin ? 'var(--red-bg)' : ''}}>
                   <div className="sim-left">
                     <strong className="mono">{t.symbol.replace('/USDT','')}</strong>
                     <span className="ai-tf">[{t.timeframe}]</span>
@@ -654,10 +680,166 @@ function SimulatePanel({ sim }) {
   );
 }
 
+// ── Trade Analysis Modal ───────────────────────────────────────────────────
+function TradeAnalysisModal({ tradeId, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!tradeId) return;
+    setLoading(true);
+    fetch('/api/trade-analysis/' + tradeId)
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [tradeId]);
+
+  if (!tradeId) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            AI Post-Mortem Analysis
+          </div>
+          <button className="modal-close" onClick={onClose}>✖</button>
+        </div>
+        <div className="modal-body">
+          {loading ? (
+             <div className="empty"><div className="empty-msg">Analyzing trade...</div></div>
+          ) : !data || data.error ? (
+             <div className="empty"><div className="empty-msg">Analysis not available yet. Check back soon.</div></div>
+          ) : (
+            <div>
+              <div style={{display:'flex', gap:'12px', marginBottom:'20px', flexWrap:'wrap', alignItems: 'center'}}>
+                <strong className="mono">{data.trade.symbol}</strong>
+                <StrategyBadge strategy={data.trade.strategy} />
+                <Badge type="red">Loss: {fmtPct(data.trade.pnl_pct)}</Badge>
+                <span className="ai-ts">{fmtTime(data.analyzed_at)}</span>
+              </div>
+
+              <div className="analysis-section">
+                <h4>What Caused the Loss?</h4>
+                <div className="analysis-box">
+                  <strong>Cause:</strong> {data.analysis.cause}<br/><br/>
+                  <strong>Market Conditions:</strong> {data.analysis.market_conditions}
+                </div>
+              </div>
+
+              <div className="analysis-section">
+                <h4>Detailed Breakdown</h4>
+                <div className="analysis-box">
+                  {data.analysis.what_went_wrong}
+                </div>
+              </div>
+              
+              <div className="analysis-section">
+                <h4>Solution & Learned Rule</h4>
+                <div className="analysis-box" style={{marginBottom:'8px'}}>
+                  {data.analysis.solution}
+                </div>
+                {data.analysis.new_rule && (
+                  <div className="analysis-rule">
+                    <span style={{fontSize:'16px'}}>💡</span>
+                    <div>
+                      <div style={{marginBottom:'4px', fontSize:'11px', textTransform:'uppercase', color:'var(--accent)'}}>New Strategy Rule Added</div>
+                      {data.analysis.new_rule}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Strategy Learning Panel ────────────────────────────────────────────────
+function StrategyLearningPanel() {
+  const [strategies, setStrategies] = useState([]);
+  const [activeTab, setActiveTab] = useState('bounce');
+  const [lessonsData, setLessonsData] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/strategies')
+      .then(r => r.json())
+      .then(d => {
+         setStrategies(d);
+         if (d.length > 0 && !d.find(s => s.strategy === activeTab)) {
+           setActiveTab(d[0].strategy);
+         }
+      })
+      .catch(()=>{});
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!activeTab) return;
+    setLessonsData(null);
+    fetch('/api/strategy-lessons/' + activeTab)
+      .then(r => r.json())
+      .then(d => setLessonsData(d))
+      .catch(()=>{});
+  }, [activeTab]);
+
+  return (
+    <div className="panel panel-full" style={{marginTop: '20px'}}>
+      <div className="panel-header">
+        <span className="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+          Continuous Strategy Learning
+        </span>
+      </div>
+      
+      <div className="tabs-nav">
+        {strategies.map(s => (
+          <button 
+            key={s.strategy} 
+            className={`tab-btn ${activeTab === s.strategy ? 'active' : ''}`}
+            onClick={() => setActiveTab(s.strategy)}
+          >
+            {STRATEGY_LABELS[s.strategy] || s.strategy} ({s.rule_count})
+          </button>
+        ))}
+      </div>
+
+      <div className="panel-body" style={{minHeight: '200px'}}>
+        {!lessonsData ? (
+          <div className="empty"><div className="empty-msg">Loading rules...</div></div>
+        ) : !lessonsData.rules || lessonsData.rules.length === 0 ? (
+          <div className="empty"><div className="empty-icon">📝</div><div className="empty-msg">No rules learned for this strategy yet. Waiting for post-mortem analysis.</div></div>
+        ) : (
+          <div>
+            <div style={{padding:'10px 20px', background:'var(--bg)', fontSize:'12px', color:'var(--muted)', display:'flex', gap:'16px'}}>
+              <span>Analyzed Losses: {lessonsData.total_losses_analyzed}</span>
+              <span>Last Updated: {fmtTime(lessonsData.last_updated)}</span>
+            </div>
+            {lessonsData.rules.map((r, i) => (
+              <div className="strategy-rule-item" key={i}>
+                <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                  <span style={{background:'var(--surface)', border:'1px solid var(--border)', width:'20px', height:'20px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', color:'var(--accent)', flexShrink:0}}>{i+1}</span>
+                  <span style={{fontSize:'13px', fontWeight:'500'}}>{r.rule}</span>
+                </div>
+                {r.cause && <div style={{paddingLeft:'28px', fontSize:'11px', color:'var(--muted)'}}>Cause: {r.cause}</div>}
+                <div style={{paddingLeft:'28px', fontSize:'10px', color:'var(--muted)'}}>{fmtTime(r.added_at)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────
 function App() {
   const [state, setState] = useState(null);
   const [wsStatus, setWsStatus] = useState('connecting'); // connecting | live | disconnected
+  const [selectedTradeId, setSelectedTradeId] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
 
@@ -719,6 +901,13 @@ function App() {
   const alerts = state?.alerts    || [];
   const scanLog = state?.scan_log || [];
   const sim    = state?.sim      || {};
+
+  const handleTradeClick = (t) => {
+    const ts = (t.closed_at || '').replace(/:/g, '-').replace(/\+/g, 'p');
+    const sym = (t.symbol || 'UNK').replace(/\//g, '-');
+    const strat = t.strategy || 'unknown';
+    setSelectedTradeId(`${ts}_${sym}_${strat}`);
+  };
 
   const aiApprovalRate = (stats.ai_approved + stats.ai_rejected) > 0
     ? Math.round(stats.ai_approved / (stats.ai_approved + stats.ai_rejected) * 100)
@@ -810,7 +999,7 @@ function App() {
         {/* Positions + Trade History */}
         <div className="panels">
           <PositionsPanel positions={pos} />
-          <TradeHistoryPanel trades={trades} />
+          <TradeHistoryPanel trades={trades} onTradeClick={handleTradeClick} />
         </div>
 
         {/* Secondary Panels (AI Log / Leads / Scanning) */}
@@ -822,10 +1011,16 @@ function App() {
 
         {/* Simulate Opportunity */}
         <div className="panels">
-          <SimulatePanel sim={sim} />
+          <SimulatePanel sim={sim} onTradeClick={handleTradeClick} />
         </div>
+        
+        {/* Continuous Strategy Learning */}
+        <StrategyLearningPanel />
 
       </div>
+      
+      {/* Modals */}
+      <TradeAnalysisModal tradeId={selectedTradeId} onClose={() => setSelectedTradeId(null)} />
     </>
   );
 }

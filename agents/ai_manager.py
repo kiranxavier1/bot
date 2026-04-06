@@ -167,10 +167,9 @@ def build_proposal(
             "reasoning (string), risks (list of strings)."
         ),
     }
-    
     # Retrieve lessons for this strategy
-    from agents.post_mortem import RetrainingAgent
-    lessons = RetrainingAgent.load_lessons(strategy)
+    from agents.post_mortem import load_strategy_rules
+    lessons = load_strategy_rules(strategy)
     proposal["continuous_learning_rules"] = lessons
     
     return proposal
