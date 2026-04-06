@@ -93,12 +93,25 @@ class ScoutAgent:
         """
         try:
             tickers = await self._public_exchange.fetch_tickers()
-            usdt_pairs = [
-                (sym, t.get("quoteVolume") or 0.0)
-                for sym, t in tickers.items()
-                if sym.endswith("/USDT")
-                and not any(x in sym for x in [":USDT", "UP/", "DOWN/", "BULL/", "BEAR/"])
-            ]
+            usdt_pairs = []
+            for sym, t in tickers.items():
+                if not sym.endswith("/USDT"):
+                    continue
+                if any(x in sym for x in [":USDT", "UP/", "DOWN/", "BULL/", "BEAR/"]):
+                    continue
+                quote_vol = t.get("quoteVolume") or 0.0
+                # Volatility filter: require minimum 24h high-low range as % of price.
+                # This ensures we only track coins with enough intraday movement for
+                # scalping and swing trades. Stablecoins and dead coins are excluded.
+                high_24h = t.get("high") or 0.0
+                low_24h  = t.get("low")  or 0.0
+                close    = t.get("close") or t.get("last") or 0.0
+                if close > 0 and low_24h > 0:
+                    daily_range_pct = (high_24h - low_24h) / low_24h * 100
+                else:
+                    daily_range_pct = 0.0
+                if daily_range_pct >= config.MIN_DAILY_RANGE_PCT:
+                    usdt_pairs.append((sym, quote_vol))
             usdt_pairs.sort(key=lambda x: x[1], reverse=True)
             top = [sym for sym, _ in usdt_pairs[: config.TOP_N_PAIRS]]
             # Always include BTC for macro sentiment

@@ -1,11 +1,12 @@
 """
-utils/indicators.py  (v2)
+utils/indicators.py  (v3)
 ─────────────────────────────────────────────────────────────────────────────
 Technical indicator library — all computed natively, no pandas-ta dependency.
 
 Functions
 ─────────
 calc_atr(df, period)             → ATR value  [FIX #4]
+calc_atr_pct(df, period)         → ATR as % of price (volatility filter)
 calc_adx_full(df, period)        → (ADX, DI+, DI-)  [FIX #3]
 calc_rsi(df, period)             → latest RSI
 calc_ema(series, period)         → EMA Series
@@ -16,6 +17,10 @@ market_regime(df)                → ("trending"|"ranging", adx, di_plus, di_min
 fetch_news_sentiment(ccy, key)   → bool
 calc_bollinger_bands(df, p, std) → (upper, mid, lower)
 detect_fvg(df, lookback)         → List of active Bullish FVGs
+calc_vwap(df, session_candles)   → float VWAP (24h rolling by default)
+calc_stoch_rsi(df, ...)          → (K, D) Stochastic RSI 0-100
+detect_rsi_divergence(df, ...)   → dict with divergence details | None
+detect_liquidity_sweep(df, ...)  → dict with sweep details | None
 ─────────────────────────────────────────────────────────────────────────────
 """
 
@@ -319,8 +324,204 @@ def detect_fvg(df: pd.DataFrame, lookback: int = 20) -> list[dict]:
                         })
 
         # Return the most recent FVGs first
-        return active_fvgs[::-1]
+        return list(reversed(active_fvgs))
     except Exception as exc:
         log.warning("FVG detection failed: %s", exc)
         return []
+
+
+# ── VWAP (Volume Weighted Average Price) ──────────────────────────────────────
+def calc_vwap(df: pd.DataFrame, session_candles: int = None) -> float:
+    """
+    Rolling VWAP over the last `session_candles` periods.
+    Default 96 candles = 24h on 15m timeframe.
+
+    Institutional traders treat VWAP as the 'fair value' intraday anchor.
+    Price pulling back to VWAP during an uptrend is one of the highest-
+    probability scalping entries because large players re-accumulate there.
+    """
+    try:
+        n = session_candles or getattr(config, "VWAP_SESSION_CANDLES", 96)
+        n = min(n, len(df))
+        sub = df.iloc[-n:]
+        typical = (sub["high"].astype(float) + sub["low"].astype(float) + sub["close"].astype(float)) / 3
+        vol = sub["volume"].astype(float)
+        total_vol = vol.sum()
+        if total_vol <= 0:
+            return float(df["close"].iloc[-1])
+        return float((typical * vol).sum() / total_vol)
+    except Exception as exc:
+        log.warning("VWAP calculation failed: %s", exc)
+        return 0.0
+
+
+# ── Stochastic RSI ────────────────────────────────────────────────────────────
+def calc_stoch_rsi(
+    df: pd.DataFrame,
+    rsi_period: int = 14,
+    stoch_period: int = 14,
+    smooth_k: int = 3,
+    smooth_d: int = 3,
+) -> Tuple[float, float]:
+    """
+    Stochastic RSI — returns (%K, %D), both scaled 0–100.
+
+    More responsive than plain RSI on volatile coins.  Particularly useful
+    for mean-reversion entries: K < 20 and crossing above D = oversold reversal.
+    """
+    try:
+        delta = df["close"].astype(float).diff()
+        gain = delta.clip(lower=0)
+        loss = (-delta).clip(lower=0)
+        avg_gain = gain.ewm(alpha=1 / rsi_period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1 / rsi_period, adjust=False).mean()
+        rs = avg_gain / avg_loss.replace(0, np.nan)
+        rsi = 100 - (100 / (1 + rs))
+
+        rsi_min = rsi.rolling(stoch_period).min()
+        rsi_max = rsi.rolling(stoch_period).max()
+        stoch = 100 * (rsi - rsi_min) / (rsi_max - rsi_min).replace(0, np.nan)
+        k = stoch.rolling(smooth_k).mean()
+        d = k.rolling(smooth_d).mean()
+
+        return float(k.fillna(50).iloc[-1]), float(d.fillna(50).iloc[-1])
+    except Exception as exc:
+        log.warning("Stochastic RSI failed: %s", exc)
+        return 50.0, 50.0
+
+
+# ── RSI Divergence ────────────────────────────────────────────────────────────
+def detect_rsi_divergence(
+    df: pd.DataFrame,
+    rsi_period: int = 14,
+    lookback: int = None,
+    oversold_level: float = None,
+) -> Optional[dict]:
+    """
+    Detects BULLISH RSI divergence over the last `lookback` candles.
+
+    Bullish divergence = price makes a lower low but RSI makes a higher low.
+    This means selling pressure is exhausting even as price falls — a leading
+    indicator of reversal.  Most reliable on 15m–4h for swing entries.
+
+    Returns dict with divergence details, or None if not found.
+    """
+    try:
+        lookback = lookback or getattr(config, "RSI_DIVERGENCE_LOOKBACK", 20)
+        oversold = oversold_level or getattr(config, "RSI_DIVERGENCE_OVERSOLD", 45)
+
+        window = min(lookback, len(df) - rsi_period - 2)
+        if window < 6:
+            return None
+
+        close = df["close"].astype(float)
+        lows = df["low"].astype(float)
+
+        # Compute RSI over full df for accuracy, then slice to window
+        delta = close.diff()
+        gain = delta.clip(lower=0)
+        loss = (-delta).clip(lower=0)
+        avg_gain = gain.ewm(alpha=1 / rsi_period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1 / rsi_period, adjust=False).mean()
+        rs = avg_gain / avg_loss.replace(0, np.nan)
+        rsi_series = (100 - (100 / (1 + rs))).fillna(50)
+
+        # Work on the recent window only
+        price_vals = lows.iloc[-window:].values
+        rsi_vals = rsi_series.iloc[-window:].values
+
+        # Find local price minima (valleys)
+        minima = [
+            i for i in range(1, len(price_vals) - 1)
+            if price_vals[i] < price_vals[i - 1] and price_vals[i] < price_vals[i + 1]
+        ]
+        if len(minima) < 2:
+            return None
+
+        prev_i = minima[-2]
+        curr_i = minima[-1]
+
+        price_lower_low = price_vals[curr_i] < price_vals[prev_i]
+        rsi_higher_low = rsi_vals[curr_i] > rsi_vals[prev_i]
+        rsi_in_oversold = rsi_vals[curr_i] < oversold
+
+        if price_lower_low and rsi_higher_low and rsi_in_oversold:
+            return {
+                "type": "bullish",
+                "price_low1": float(price_vals[prev_i]),
+                "price_low2": float(price_vals[curr_i]),
+                "rsi_low1": round(float(rsi_vals[prev_i]), 2),
+                "rsi_low2": round(float(rsi_vals[curr_i]), 2),
+                "current_rsi": round(float(rsi_series.iloc[-1]), 2),
+                "rsi_gain": round(float(rsi_vals[curr_i] - rsi_vals[prev_i]), 2),
+            }
+        return None
+    except Exception as exc:
+        log.warning("RSI divergence detection failed: %s", exc)
+        return None
+
+
+# ── Liquidity Sweep (Stop Hunt) ───────────────────────────────────────────────
+def detect_liquidity_sweep(df: pd.DataFrame, lookback: int = 20) -> Optional[dict]:
+    """
+    Detects a bullish liquidity sweep (stop-hunt below a prior swing low).
+
+    Pattern: institutional players push price below a visible swing low to
+    trigger retail stop-losses (buy orders), absorb that liquidity, then
+    rapidly reverse upward.  A candle that wicks below the swing low but
+    closes back above it is the key signal.
+
+    Returns dict with sweep details if found in the last 3 candles, else None.
+    """
+    try:
+        n = min(lookback, len(df))
+        sub = df.iloc[-n:]
+        lows = sub["low"].astype(float).values
+        closes = sub["close"].astype(float).values
+
+        if len(lows) < 6:
+            return None
+
+        # Find the most recent swing low in the PRIOR section (exclude last 3 candles)
+        prior_lows = lows[:-3]
+        swing_low = None
+        for i in range(len(prior_lows) - 1, 0, -1):
+            left_ok = i == 0 or prior_lows[i] < prior_lows[i - 1]
+            right_ok = (i + 1 >= len(prior_lows)) or prior_lows[i] < prior_lows[i + 1]
+            if left_ok and right_ok:
+                swing_low = prior_lows[i]
+                break
+
+        if swing_low is None:
+            return None
+
+        # Check last 3 candles for sweep + reclaim
+        for low, close in zip(lows[-3:], closes[-3:]):
+            if low < swing_low and close > swing_low:
+                sweep_depth_pct = (swing_low - low) / swing_low * 100
+                if sweep_depth_pct >= 0.1:
+                    return {
+                        "swing_low": float(swing_low),
+                        "sweep_low": float(low),
+                        "reclaim_close": float(close),
+                        "sweep_depth_pct": round(sweep_depth_pct, 3),
+                    }
+        return None
+    except Exception as exc:
+        log.warning("Liquidity sweep detection failed: %s", exc)
+        return None
+
+
+# ── ATR as % of price ─────────────────────────────────────────────────────────
+def calc_atr_pct(df: pd.DataFrame, period: int = None) -> float:
+    """
+    ATR expressed as a percentage of current price.
+    Used as a relative volatility filter for coin selection:
+    only trade coins with enough intraday range to capture scalp/swing gains.
+    """
+    atr = calc_atr(df, period)
+    price = float(df["close"].iloc[-1])
+    if price <= 0:
+        return 0.0
+    return (atr / price) * 100
 

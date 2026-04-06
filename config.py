@@ -113,6 +113,25 @@ ADX_TREND_THRESHOLD = 25     # ADX must be above this
 # DI+ must be > DI− to confirm upward trend direction
 ADX_REQUIRE_DIRECTION = True
 
+# ── VWAP Bounce strategy ──────────────────────────────────────────────────────
+# Rolling session length: 96 × 15m = 24 h — mirrors how institutions reset VWAP daily
+VWAP_SESSION_CANDLES    = int(_optional("VWAP_SESSION_CANDLES", "96"))
+# Arm the VWAP watcher when price is within 0.3% of VWAP
+VWAP_PROXIMITY          = float(_optional("VWAP_PROXIMITY", "0.003"))
+# Volume confirmation for VWAP bounce (slightly lower than trendline bounce)
+VWAP_VOLUME_MULTIPLIER  = float(_optional("VWAP_VOLUME_MULTIPLIER", "1.2"))
+
+# ── RSI Divergence strategy ───────────────────────────────────────────────────
+# Number of recent candles to scan for divergence patterns
+RSI_DIVERGENCE_LOOKBACK = int(_optional("RSI_DIVERGENCE_LOOKBACK", "20"))
+# RSI at the second (lower) price low must be below this level (mildly oversold)
+RSI_DIVERGENCE_OVERSOLD = float(_optional("RSI_DIVERGENCE_OVERSOLD", "45"))
+
+# ── Coin selection — volatility filter ────────────────────────────────────────
+# Minimum 24h high-low range as % of price; filters stablecoins & low-vol coins
+# 3% daily range = coin can actually produce scalping / swing profits
+MIN_DAILY_RANGE_PCT = float(_optional("MIN_DAILY_RANGE_PCT", "3.0"))
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_LEVEL = _optional("LOG_LEVEL", "INFO").upper()
 LOG_FILE  = _optional("LOG_FILE", "bot.log")
