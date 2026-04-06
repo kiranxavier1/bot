@@ -54,7 +54,7 @@ from agents.warden        import (
     calculate_take_profit,
     calculate_position_size,
 )
-from data.candle_buffer   import BufferRegistry
+from utils.candle_buffer   import BufferRegistry
 from utils.indicators     import (
     calc_atr,
     market_regime,

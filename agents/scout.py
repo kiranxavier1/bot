@@ -28,7 +28,7 @@ from typing import Awaitable, Callable, Dict, List, Optional, Set
 import ccxt.pro as ccxtpro  # type: ignore
 
 import config
-from data.candle_buffer import BufferRegistry
+from utils.candle_buffer import BufferRegistry
 from web.state import bot_state
 
 log = logging.getLogger(__name__)

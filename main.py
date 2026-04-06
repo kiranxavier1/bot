@@ -45,7 +45,7 @@ import ccxt.pro as ccxtpro  # type: ignore
 import config
 from utils.logger        import setup_logging
 from utils.notifications import Notifier
-from data.candle_buffer  import BufferRegistry
+from utils.candle_buffer  import BufferRegistry
 from agents.scout        import ScoutAgent
 from agents.mathematician import MathematicianAgent
 from agents.ai_manager   import AIManager
