@@ -110,6 +110,14 @@
     .lead-symbol { font-weight: 700; font-size: 13px; color: var(--accent); }
     .lead-price-row { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-top: 8px; }
 
+    /* Scan log entry */
+    .scan-entry { padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .scan-entry:last-child { border-bottom: none; }
+    .scan-meta { display: flex; align-items: center; gap: 8px; }
+    .scan-symbol { font-weight: 700; font-size: 12px; }
+    .scan-price { font-size: 12px; color: var(--muted); }
+    .scan-pulse { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--blue-bg); animation: pulse 2s infinite; }
+
     /* Empty state */
     .empty { padding: 48px 20px; text-align: center; color: var(--muted); }
     .empty-icon { font-size: 32px; margin-bottom: 10px; }
@@ -437,6 +445,53 @@ function LeadsPanel({ alerts }) {
   );
 }
 
+// ── Live Scanning Panel ───────────────────────────────────────────────────
+function ScanLogPanel({ scanLog }) {
+  if (!scanLog || scanLog.length === 0) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <span className="panel-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Live Scanning
+          </span>
+          <span className="panel-count">0</span>
+        </div>
+        <div className="empty"><div className="empty-icon">📡</div><div className="empty-msg">Waiting for market data...</div></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span className="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Live Scanning
+        </span>
+        <span className="panel-count" style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+          <div className="scan-pulse"></div>
+          Active
+        </span>
+      </div>
+      <div className="panel-body" style={{maxHeight:'380px'}}>
+        {scanLog.map((entry, i) => (
+          <div className="scan-entry" key={i}>
+            <div className="scan-meta">
+              <span className="scan-symbol mono">{entry.symbol}</span>
+              <span className="ai-tf">[{entry.timeframe}]</span>
+            </div>
+            <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+              <span className="scan-price mono">{fmt(entry.price)}</span>
+              <span className="ai-ts">{fmtTime(entry.timestamp)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────
 function App() {
   const [state, setState] = useState(null);
@@ -500,6 +555,7 @@ function App() {
   const trades = state?.trades    || [];
   const aiLog  = state?.ai_log    || [];
   const alerts = state?.alerts    || [];
+  const scanLog = state?.scan_log || [];
 
   const aiApprovalRate = (stats.ai_approved + stats.ai_rejected) > 0
     ? Math.round(stats.ai_approved / (stats.ai_approved + stats.ai_rejected) * 100)
@@ -582,10 +638,11 @@ function App() {
           <TradeHistoryPanel trades={trades} />
         </div>
 
-        {/* AI Log + Leads Box */}
-        <div className="panels">
-          <AILogPanel aiLog={aiLog} />
+        {/* Secondary Panels (AI Log / Leads / Scanning) */}
+        <div className="panels" style={{gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))'}}>
+          <ScanLogPanel scanLog={scanLog} />
           <LeadsPanel alerts={alerts} />
+          <AILogPanel aiLog={aiLog} />
         </div>
 
       </div>

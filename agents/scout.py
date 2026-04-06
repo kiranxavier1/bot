@@ -179,6 +179,11 @@ class ScoutAgent:
                     continue
                 await buf.update(candles)
 
+                # Push scan event to state
+                asyncio.create_task(
+                    bot_state.push_scan_event(symbol, timeframe, float(candles[-1][4]))
+                )
+
                 # Detect candle close event
                 latest_ts = int(candles[-1][0])
                 prev_ts   = self._last_ts.get(key, 0)
