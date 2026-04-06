@@ -3,7 +3,7 @@ ccxt[pro]>=4.3.0            # CCXT Pro for WebSocket + REST exchange access
 aiohttp>=3.9.0              # Async HTTP (used internally by ccxt.pro)
 
 # AI / LLM
-google-generativeai>=0.8.0    # Gemini AI (trade proposal gating)
+google-genai>=0.3.0           # Gemini AI SDK (replaces legacy google-generativeai)
 
 # Technical analysis
 pandas>=2.1.0               # DataFrame manipulation for candle data

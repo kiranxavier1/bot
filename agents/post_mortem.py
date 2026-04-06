@@ -26,8 +26,8 @@ import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import config
 
 from web.state import bot_state
@@ -164,15 +164,12 @@ class RetrainingAgent:
     """
 
     def __init__(self, exchange=None):
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        self._model = genai.GenerativeModel(
-            model_name=config.GEMINI_MODEL,
-            system_instruction=(
-                "You are a quantitative trading analyst. You analyze losing trades "
-                "and produce structured JSON post-mortem reports. Be specific and "
-                "actionable. Every rule you create must be concrete enough for an AI "
-                "to evaluate on the next trade."
-            )
+        self._client = genai.Client(api_key=config.GEMINI_API_KEY)
+        self._system_instruction = (
+            "You are a quantitative trading analyst. You analyze losing trades "
+            "and produce structured JSON post-mortem reports. Be specific and "
+            "actionable. Every rule you create must be concrete enough for an AI "
+            "to evaluate on the next trade."
         )
         self._exchange = exchange
         self._running = False
@@ -252,7 +249,13 @@ Output ONLY valid JSON (no markdown):
 }}"""
 
         try:
-            response = await self._model.generate_content_async(prompt)
+            response = await self._client.aio.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=self._system_instruction,
+                )
+            )
             raw = response.text.strip()
 
             # Strip markdown if present
