@@ -31,8 +31,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+import pandas as pd
+
 import config
 from agents.mathematician import find_pivot_lows
+from utils.indicators import calc_atr
 from web.state import bot_state
 
 log = logging.getLogger(__name__)
@@ -49,7 +52,9 @@ class Position:
     quantity:     float          # base asset quantity
     strategy:     str = "bounce"
     entry_ts:     float = field(default_factory=time.time)  # seconds epoch
-    be_activated: bool = False   # True once SL was trailed via structure BE
+    be_activated: bool  = False  # True once SL has passed entry price
+    # Tracks the highest close seen since entry — used for ATR trailing SL
+    highest_close_since_entry: float = 0.0
 
     @property
     def sl_pct(self) -> float:
@@ -181,21 +186,20 @@ def calculate_position_size(
     risk_pct:     float = None,
 ) -> float:
     """
-    Fixed fractional position sizing.
+    Capital-based position sizing: deploy CAPITAL_PER_TRADE (default 25 %) of
+    free balance per trade.
 
-    risk_amount = balance × risk_pct
-    sl_distance = |entry − stop_loss| / entry
-    quantity    = risk_amount / (entry × sl_distance)
+    quantity = (balance × capital_pct) / entry_price
+
+    risk_pct is accepted for API compatibility but ignored; sizing is now
+    capital-fraction-based, not risk-fraction-based.
     """
-    risk_pct    = risk_pct if risk_pct is not None else config.RISK_PER_TRADE
-    risk_amount = balance_usdt * risk_pct
-    sl_distance = abs(entry_price - stop_loss) / entry_price
-
-    if sl_distance == 0:
-        log.warning("SL distance is zero — cannot size position")
+    if entry_price <= 0:
+        log.warning("Entry price is zero — cannot size position")
         return 0.0
 
-    return risk_amount / (entry_price * sl_distance)
+    capital_to_deploy = balance_usdt * config.CAPITAL_PER_TRADE
+    return capital_to_deploy / entry_price
 
 
 # ── Warden Agent ──────────────────────────────────────────────────────────────
@@ -261,6 +265,7 @@ class WardenAgent:
             take_profit=take_profit,
             quantity=quantity,
             strategy=strategy,
+            highest_close_since_entry=entry_price,
         )
         self._positions[symbol] = pos
         log.info(
@@ -397,29 +402,57 @@ class WardenAgent:
             self.close_position(symbol)
             return "TP"
 
-        # ── Structure-based Break-Even (FIX #8) ──────────────────────────────
-        if candles and not pos.be_activated:
-            new_sl = self._find_structure_sl(pos, candles)
-            if new_sl and new_sl > pos.stop_loss:
-                old_sl        = pos.stop_loss
-                pos.stop_loss = new_sl
+        # ── Trailing Stop Loss: ATR-based + Structure (unified) ──────────────
+        # Runs on every candle — never stops, even after break-even is reached.
+        # Candidate 1: ATR trailing  →  highest_close - ATR × multiplier
+        # Candidate 2: Structure     →  most recent post-entry pivot low
+        # Final SL = max(both candidates, current SL)  — only ever moves up.
+        if candles:
+            best_trail = pos.stop_loss  # never allow SL to go backward
 
-                # Mark BE activated once SL has reached or passed entry price
-                if new_sl >= pos.entry_price:
+            # ── ATR trail ────────────────────────────────────────────────────
+            if len(candles) >= config.ATR_PERIOD + 2:
+                try:
+                    df_trail = pd.DataFrame(
+                        candles[-50:],
+                        columns=["timestamp", "open", "high", "low", "close", "volume"],
+                    )
+                    atr = calc_atr(df_trail)
+                    if atr > 0:
+                        # Keep a high-water mark of the close price since entry
+                        pos.highest_close_since_entry = max(
+                            pos.highest_close_since_entry, latest_close
+                        )
+                        atr_trail = pos.highest_close_since_entry - atr * config.ATR_MULTIPLIER
+                        best_trail = max(best_trail, atr_trail)
+                except Exception as _exc:
+                    log.debug("ATR trail calc failed for %s: %s", symbol, _exc)
+
+            # ── Structure trail ───────────────────────────────────────────────
+            struct_sl = self._find_structure_sl(pos, candles)
+            if struct_sl:
+                best_trail = max(best_trail, struct_sl)
+
+            # ── Apply if improved ─────────────────────────────────────────────
+            if best_trail > pos.stop_loss:
+                old_sl        = pos.stop_loss
+                pos.stop_loss = best_trail
+
+                if best_trail >= pos.entry_price:
                     pos.be_activated = True
-                    be_label = "Break-Even"
+                    label = "Break-Even ✅"
                 else:
-                    be_label = "SL trailed"
+                    label = "TSL trailed"
 
                 log.info(
-                    "🔁 %s: %s | SL %.6g → %.6g (structure pivot at %.6g)",
-                    be_label, symbol, old_sl, new_sl,
-                    new_sl / 0.999,    # reverse the 0.1% buffer to show pivot
+                    "🔁 %s: %s | SL %.6g → %.6g (high=%.6g)",
+                    label, symbol, old_sl, best_trail,
+                    pos.highest_close_since_entry,
                 )
                 asyncio.create_task(bot_state.push_breakeven_activated(
-                    symbol=symbol, new_sl=new_sl
+                    symbol=symbol, new_sl=best_trail
                 ))
-                return "BE"
+                return "TSL"
 
         return None
 

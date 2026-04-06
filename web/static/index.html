@@ -82,6 +82,10 @@
     .badge.amber  { background: var(--amber-bg); color: var(--amber); }
     .badge.blue   { background: var(--blue-bg);  color: var(--accent);}
     .badge.gray   { background: #f3f4f6; color: var(--muted); }
+    .badge.purple { background: #ede9fe; color: #7c3aed; }
+    .badge.teal   { background: #ccfbf1; color: #0f766e; }
+    .badge.orange { background: #ffedd5; color: #c2410c; }
+    .badge.indigo { background: #e0e7ff; color: #4338ca; }
 
     /* P&L colours */
     .pnl-pos { color: var(--green); font-weight: 600; }
@@ -197,6 +201,29 @@ function Badge({ type, children }) {
   return <span className={`badge ${type}`}>{children}</span>;
 }
 
+// ── Strategy helpers ────────────────────────────────────────────────────────
+const STRATEGY_COLORS = {
+  bounce:         'blue',
+  mean_reversion: 'amber',
+  fvg:            'purple',
+  breakout:       'green',
+  vwap_bounce:    'teal',
+  rsi_divergence: 'orange',
+};
+const STRATEGY_LABELS = {
+  bounce:         '⟆ Bounce',
+  mean_reversion: '↔ Mean Rev',
+  fvg:            '◈ FVG',
+  breakout:       '↑ Breakout',
+  vwap_bounce:    '⊙ VWAP',
+  rsi_divergence: '~ RSI Div',
+};
+function StrategyBadge({ strategy }) {
+  const color = STRATEGY_COLORS[strategy] || 'gray';
+  const label = STRATEGY_LABELS[strategy] || strategy;
+  return <Badge type={color}>{label}</Badge>;
+}
+
 // ── Stat Card ──────────────────────────────────────────────────────────────
 function StatCard({ label, value, valueClass, sub }) {
   return (
@@ -239,9 +266,10 @@ function PositionsPanel({ positions }) {
           <thead>
             <tr>
               <th>Symbol</th>
+              <th>Strategy</th>
               <th>Entry</th>
               <th>Current</th>
-              <th>SL</th>
+              <th>SL 🔒</th>
               <th>TP</th>
               <th>P&amp;L</th>
               <th>Status</th>
@@ -252,12 +280,19 @@ function PositionsPanel({ positions }) {
             {positions.map(pos => (
               <tr key={pos.symbol}>
                 <td><strong className="mono">{pos.symbol.replace('/USDT','')}</strong><span style={{color:'var(--muted)',fontSize:'11px'}}>/USDT</span></td>
+                <td><StrategyBadge strategy={pos.strategy} /></td>
                 <td className="mono">{fmt(pos.entry)}</td>
                 <td className="mono">{fmt(pos.current_price)}</td>
                 <td className="mono" style={{color:'var(--red)'}}>{fmt(pos.stop_loss)}</td>
                 <td className="mono" style={{color:'var(--green)'}}>{fmt(pos.take_profit)}</td>
                 <td><PnlCell value={pos.pnl_pct} /></td>
-                <td>{pos.be_activated ? <Badge type="amber">BE Active</Badge> : <Badge type="blue">Live</Badge>}</td>
+                <td>
+                  {pos.be_activated
+                    ? <Badge type="green">BE ✅</Badge>
+                    : pos.stop_loss > pos.entry * 0.99
+                    ? <Badge type="amber">TSL 📈</Badge>
+                    : <Badge type="blue">Live</Badge>}
+                </td>
                 <td style={{color:'var(--muted)'}}>{fmtTime(pos.opened_at)}</td>
               </tr>
             ))}
@@ -299,6 +334,7 @@ function TradeHistoryPanel({ trades }) {
           <thead>
             <tr>
               <th>Symbol</th>
+              <th>Strategy</th>
               <th>Entry</th>
               <th>Exit</th>
               <th>P&amp;L</th>
@@ -310,6 +346,7 @@ function TradeHistoryPanel({ trades }) {
             {trades.map((t, i) => (
               <tr key={i}>
                 <td><strong className="mono">{t.symbol.replace('/USDT','')}</strong><span style={{color:'var(--muted)',fontSize:'11px'}}>/USDT</span></td>
+                <td><StrategyBadge strategy={t.strategy} /></td>
                 <td className="mono">{fmt(t.entry)}</td>
                 <td className="mono">{fmt(t.exit)}</td>
                 <td><PnlCell value={t.pnl_pct} /></td>
@@ -368,6 +405,7 @@ function AILogPanel({ aiLog }) {
             <div className="ai-meta">
               <span className="ai-symbol mono">{entry.symbol}</span>
               <span className="ai-tf">[{entry.timeframe}]</span>
+              {entry.strategy && <StrategyBadge strategy={entry.strategy} />}
               {entry.decision === 'PROCEED'
                 ? <Badge type="green">✓ PROCEED</Badge>
                 : <Badge type="red">✗ REJECT</Badge>}
@@ -433,22 +471,41 @@ function LeadsPanel({ alerts }) {
         {alerts.map((alert, i) => {
           const pair = alert.symbol.replace('/', '_');
           const url = `https://www.binance.com/en/trade/${pair}?type=spot`;
+          const hasSignal = alert.entry_price > 0;
           return (
             <a href={url} target="_blank" rel="noopener noreferrer" className="lead-entry" key={i}>
               <div className="lead-meta">
-                <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+                <div style={{display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap'}}>
                   <span className="lead-symbol mono">{alert.symbol}</span>
                   <span className="ai-tf">[{alert.timeframe}]</span>
+                  <StrategyBadge strategy={alert.strategy || 'bounce'} />
                 </div>
                 <span className="ai-ts">{fmtTime(alert.timestamp)}</span>
               </div>
-              <div className="lead-price-row">
-                <span>Price: <strong className="mono">{fmt(alert.price)}</strong></span>
-                <span>Trendline: <strong className="mono">{fmt(alert.trendline_price)}</strong></span>
-                <span style={{marginLeft:'auto'}}>
-                  Dist: <strong className="mono" style={{color:'var(--amber)'}}>{fmt(alert.proximity_pct)}%</strong>
-                </span>
-              </div>
+              {hasSignal ? (
+                <div className="lead-price-row">
+                  <span>Entry: <strong className="mono">{fmt(alert.entry_price)}</strong></span>
+                  <span>SL: <strong className="mono" style={{color:'var(--red)'}}>{fmt(alert.stop_loss)}</strong></span>
+                  <span>TP: <strong className="mono" style={{color:'var(--green)'}}>{fmt(alert.take_profit)}</strong></span>
+                  <span style={{marginLeft:'auto'}}>
+                    R:R <strong className="mono" style={{color: alert.rr >= 2 ? 'var(--green)' : 'var(--amber)'}}>
+                      {alert.rr > 0 ? alert.rr.toFixed(1) + 'x' : '—'}
+                    </strong>
+                  </span>
+                </div>
+              ) : (
+                <div className="lead-price-row">
+                  <span>Price: <strong className="mono">{fmt(alert.price)}</strong></span>
+                  {alert.trendline_price > 0 && (
+                    <span>Trendline: <strong className="mono">{fmt(alert.trendline_price)}</strong></span>
+                  )}
+                  {alert.proximity_pct > 0 && (
+                    <span style={{marginLeft:'auto'}}>
+                      Dist: <strong className="mono" style={{color:'var(--amber)'}}>{fmt(alert.proximity_pct)}%</strong>
+                    </span>
+                  )}
+                </div>
+              )}
             </a>
           );
         })}
@@ -551,6 +608,7 @@ function SimulatePanel({ sim }) {
                 <div className="sim-left">
                   <strong className="mono">{t.symbol.replace('/USDT','')}</strong>
                   <span className="ai-tf">[{t.timeframe}]</span>
+                  <StrategyBadge strategy={t.strategy} />
                   <span className="mono" style={{fontSize:'12px'}}>Entry: {fmt(t.entry)}</span>
                   <span className="mono" style={{fontSize:'12px',color:'var(--muted)'}}>Now: {fmt(t.current)}</span>
                   <span className="sim-gbp" style={{color:'var(--accent)'}}>£{t.stake_gbp}</span>
@@ -575,6 +633,7 @@ function SimulatePanel({ sim }) {
                   <div className="sim-left">
                     <strong className="mono">{t.symbol.replace('/USDT','')}</strong>
                     <span className="ai-tf">[{t.timeframe}]</span>
+                    <StrategyBadge strategy={t.strategy} />
                     <span className="mono" style={{fontSize:'12px'}}>{fmt(t.entry)} → {fmt(t.exit)}</span>
                     <span className={`sim-gbp ${isWin ? 'pnl-pos' : 'pnl-neg'}`}>{fmtGbp(t.pnl_gbp)}</span>
                     <span style={{fontSize:'11px',color:'var(--muted)'}}>{fmtTime(t.closed_at)}</span>

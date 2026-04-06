@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: trading-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /api/status
+
+    # Render injects PORT automatically — the app already reads it
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      # ── Secrets — set these in the Render dashboard, NOT here ──────────────
+      - key: BINANCE_API_KEY
+        sync: false
+      - key: BINANCE_API_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      # Optional
+      - key: CRYPTOPANIC_API_KEY
+        sync: false
+      - key: CAPITAL_PER_TRADE
+        value: "0.25"
+      - key: MIN_AI_CONFIDENCE
+        value: "0.70"
+      - key: TOP_N_PAIRS
+        value: "50"
+      - key: LOG_LEVEL
+        value: "INFO"
+
+    # Persistent disk — keeps strategy_lessons.json across deploys/restarts
+    disk:
+      name: bot-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

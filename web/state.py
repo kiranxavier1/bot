@@ -197,11 +197,13 @@ class BotState:
         confidence: float,
         reasoning:  str,
         risks:      List[str],
+        strategy:   str = "bounce",
     ) -> None:
         async with self._lock:
             self._ai_log.appendleft({
                 "symbol":     symbol,
                 "timeframe":  timeframe,
+                "strategy":   strategy,
                 "decision":   decision,
                 "confidence": round(confidence, 3),
                 "reasoning":  reasoning,
@@ -217,19 +219,29 @@ class BotState:
     # ── Watcher alert events ──────────────────────────────────────────────────
     async def push_watcher_alert(
         self,
-        symbol:         str,
-        timeframe:      str,
-        price:          float,
-        trendline_price: float,
-        proximity_pct:  float,
+        symbol:          str,
+        timeframe:       str,
+        price:           float,
+        strategy:        str   = "bounce",
+        trendline_price: float = 0.0,
+        proximity_pct:   float = 0.0,
+        entry_price:     float = 0.0,
+        stop_loss:       float = 0.0,
+        take_profit:     float = 0.0,
+        rr:              float = 0.0,
     ) -> None:
         async with self._lock:
             self._alerts.appendleft({
                 "symbol":          symbol,
                 "timeframe":       timeframe,
                 "price":           price,
+                "strategy":        strategy,
                 "trendline_price": trendline_price,
                 "proximity_pct":   round(proximity_pct, 3),
+                "entry_price":     round(entry_price, 8) if entry_price else 0.0,
+                "stop_loss":       round(stop_loss, 8)   if stop_loss   else 0.0,
+                "take_profit":     round(take_profit, 8) if take_profit else 0.0,
+                "rr":              round(rr, 2)           if rr          else 0.0,
                 "timestamp":       _now_iso(),
             })
         await self._broadcast()

@@ -54,7 +54,10 @@ DISCOVERY_INTERVAL_SECS = 3600
 # ── AI / Claude ───────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = _optional("CLAUDE_MODEL", "claude-sonnet-4-6")
-MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.8"))
+# Lowered from 0.80 → 0.70: capture more good-risk opportunities across all 6 strategies.
+# High-volatility coins need more entries, not fewer. The quality checklist and
+# continuous learning rules still protect against bad setups.
+MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.70"))
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = _require("TELEGRAM_BOT_TOKEN")
@@ -82,7 +85,11 @@ VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "1.3"))
 VOLUME_LOOKBACK           = 20    # periods for average volume baseline
 
 # ── Risk management ───────────────────────────────────────────────────────────
-RISK_PER_TRADE = float(_optional("RISK_PER_TRADE", "0.02"))  # 2 % of balance
+RISK_PER_TRADE = float(_optional("RISK_PER_TRADE", "0.02"))  # 2 % of balance (legacy — kept for fallback)
+
+# Capital-based position sizing: deploy this fraction of free balance per trade.
+# 0.25 = 25 % of available USDT per trade.  Set via .env: CAPITAL_PER_TRADE=0.25
+CAPITAL_PER_TRADE = float(_optional("CAPITAL_PER_TRADE", "0.25"))
 
 # FIX #4 — ATR-based stop loss (replaces fixed % / candle-low)
 ATR_PERIOD     = 14

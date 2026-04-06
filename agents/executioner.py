@@ -150,7 +150,7 @@ class ExecutionerAgent:
             symbol, timeframe, candles, symbol_df
         )
 
-        # Proximity watcher alert
+        # Proximity watcher alert (trendline bounce only)
         if math_result.get("armed"):
             live_price = candles[-1]["close"]
             tl_price   = math_result.get("trendline_price", 0.0)
@@ -168,6 +168,7 @@ class ExecutionerAgent:
                 symbol=symbol,
                 timeframe=timeframe,
                 price=live_price,
+                strategy="bounce",
                 trendline_price=tl_price,
                 proximity_pct=prox_pct,
             ))
@@ -175,6 +176,25 @@ class ExecutionerAgent:
         strategy_signals = math_result.get("strategy_signals", [])
         if not strategy_signals:
             return
+
+        # Push every detected signal to the Live Opportunities panel immediately
+        # so the user can see all strategies firing in real time, before AI filtering.
+        live_price = candles[-1]["close"]
+        for _sig in strategy_signals:
+            _entry = _sig.get("entry_price", live_price)
+            _sl    = _sig.get("stop_loss",   0.0)
+            _tp    = _sig.get("take_profit",  0.0)
+            _rr    = ((_tp - _entry) / (_entry - _sl)) if _sl and _sl < _entry and _tp > _entry else 0.0
+            asyncio.create_task(bot_state.push_watcher_alert(
+                symbol=symbol,
+                timeframe=timeframe,
+                price=live_price,
+                strategy=_sig.get("strategy", "unknown"),
+                entry_price=_entry,
+                stop_loss=_sl,
+                take_profit=_tp,
+                rr=_rr,
+            ))
 
         # ── Pre-compute common filters ────────────────────────────────────────
         htf_df = await self._get_htf_df(symbol)
@@ -203,6 +223,7 @@ class ExecutionerAgent:
 
             # ── Strategy-specific Filters ─────────────────────────────────────
             if strategy in ("bounce", "fvg"):
+                # Strict: need confirmed uptrend + above HTF EMA
                 if not htf_above_ema:
                     log.info("❌ HTF filter rejected %s (%s) — price is BELOW 200-EMA", symbol, strategy)
                     continue
@@ -211,6 +232,19 @@ class ExecutionerAgent:
                     continue
                 if adx < config.ADX_TREND_THRESHOLD:
                     log.info("❌ ADX filter rejected %s (%s) — ADX=%.1f (ranging)", symbol, strategy, adx)
+                    continue
+            elif strategy in ("vwap_bounce", "rsi_divergence"):
+                # Mild: just need directional bias — ADX ≥ 20 (already filtered in mathematician)
+                if not htf_above_ema:
+                    log.info("❌ HTF filter rejected %s (%s) — price is BELOW 200-EMA", symbol, strategy)
+                    continue
+                if di_minus >= di_plus:
+                    log.info("❌ Direction rejected %s (%s) — DI- > DI+", symbol, strategy)
+                    continue
+            elif strategy == "breakout":
+                # Breakout: needs direction confirmed, no strict ADX threshold
+                if di_minus >= di_plus:
+                    log.info("❌ Direction rejected %s (%s) — DI- > DI+", symbol, strategy)
                     continue
             elif strategy == "mean_reversion":
                 if adx >= config.ADX_TREND_THRESHOLD:
@@ -505,13 +539,13 @@ class ExecutionerAgent:
                 )
             )
 
-        elif result == "BE":
+        elif result in ("TSL", "BE"):
             pos = self._warden.get_position(symbol)
             if pos:
                 await self._notifier.send(
                     f"🔁 <b>SL trailed</b> for <code>{symbol}</code> — "
                     f"new SL: <code>{pos.stop_loss:.6g}</code> "
-                    f"{'(Break-Even ✅)' if pos.be_activated else '(structure trail)'}"
+                    f"{'(Break-Even ✅)' if pos.be_activated else '(trailing 📈)'}"
                 )
 
     # ── Execute a limit sell ──────────────────────────────────────────────────
