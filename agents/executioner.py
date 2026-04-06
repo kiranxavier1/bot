@@ -361,8 +361,11 @@ class ExecutionerAgent:
             quantity = float(
                 self._exchange.amount_to_precision(symbol, quantity)
             )
+            # Add a 0.2% adaptive slippage buffer. This forces the limit order to heavily cross the 
+            # order book spread, acting essentially as a protected Market Buy to guarantee our bounce entry.
+            adaptive_limit = ask_price * 1.002
             limit_price = float(
-                self._exchange.price_to_precision(symbol, ask_price)
+                self._exchange.price_to_precision(symbol, adaptive_limit)
             )
 
             log.info(

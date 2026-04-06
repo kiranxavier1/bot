@@ -7,7 +7,6 @@ import config
 from typing import Dict, Any, List
 
 from web.state import bot_state
-from utils.indicators import fetch_recent_candles
 
 log = logging.getLogger(__name__)
 

@@ -86,9 +86,10 @@ def find_pivot_lows(candles: List[Dict], n: int = None) -> List[PivotLow]:
     pivots: List[PivotLow] = []
     total = len(candles)
     for i in range(n, total - n):
-        low_i = candles[i]["low"]
-        left  = [candles[j]["low"] for j in range(i - n, i)]
-        right = [candles[j]["low"] for j in range(i + 1, i + n + 1)]
+        # FIX: Use solid candle body base instead of absolute wick low to prevent scam-wick warping
+        low_i = min(candles[i]["open"], candles[i]["close"])
+        left  = [min(candles[j]["open"], candles[j]["close"]) for j in range(i - n, i)]
+        right = [min(candles[j]["open"], candles[j]["close"]) for j in range(i + 1, i + n + 1)]
         if all(low_i < lw for lw in left) and all(low_i < lw for lw in right):
             pivots.append(PivotLow(index=i, timestamp=candles[i]["timestamp"], low=low_i))
     return pivots
