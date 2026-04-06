@@ -51,6 +51,7 @@ from agents.mathematician import MathematicianAgent
 from agents.ai_manager   import AIManager
 from agents.warden       import WardenAgent
 from agents.executioner  import ExecutionerAgent
+from agents.post_mortem  import RetrainingAgent
 from web.server          import run_server
 from web.state           import bot_state
 
@@ -154,6 +155,8 @@ async def main() -> None:
         warden=warden,
         notifier=notifier,
     )
+    
+    retrainer = RetrainingAgent(exchange=exchange)
 
     # ── 3. Scout ──────────────────────────────────────────────────────────────
     scout = ScoutAgent(
@@ -192,6 +195,8 @@ async def main() -> None:
         asyncio.create_task(print_status_loop(warden),           name="status"),
         asyncio.create_task(run_server(host="0.0.0.0", port=port), name="web-ui"),
     ]
+    if (r_task := retrainer.start()):
+        tasks.append(r_task)
 
     log.info("All tasks started — bot is running.  Press Ctrl-C to stop.")
     log.info("📊 Dashboard → http://localhost:8000")

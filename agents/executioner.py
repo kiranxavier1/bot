@@ -172,144 +172,132 @@ class ExecutionerAgent:
                 proximity_pct=prox_pct,
             ))
 
-        if not math_result.get("signal"):
+        strategy_signals = math_result.get("strategy_signals", [])
+        if not strategy_signals:
             return
 
-        conf_candle    = math_result["confirmation_candle"]
-        trendline      = math_result["trendline"]
-        touch_count    = math_result.get("touch_count", 0)
-        vol_ratio      = math_result.get("vol_ratio", 1.0)
-        swing_tp_math  = math_result.get("swing_tp_target")   # from mathematician
-
-        log.info(
-            "🎯 Signal detected: %s [%s] touches=%d vol_ratio=%.2f — "
-            "running pre-trade filters...",
-            symbol, timeframe, touch_count, vol_ratio,
-        )
-
-        # ── FIX #2 — Higher-timeframe EMA-200 filter ─────────────────────────
+        # ── Pre-compute common filters ────────────────────────────────────────
         htf_df = await self._get_htf_df(symbol)
         htf_above_ema = price_above_ema200(htf_df) if htf_df is not None else True
-
-        if not htf_above_ema:
-            log.info(
-                "❌ HTF filter rejected %s — price is BELOW 200-EMA on %s",
-                symbol, config.HTF_FILTER_TF,
-            )
-            return
-
-        # ── FIX #3 — ADX directional filter: DI+ must exceed DI- ─────────────
         regime, adx, di_plus, di_minus = market_regime(symbol_df)
-
-        if config.ADX_REQUIRE_DIRECTION and di_minus >= di_plus:
-            log.info(
-                "❌ ADX direction rejected %s — DI-=%.1f ≥ DI+=%.1f (no upward pressure)",
-                symbol, di_minus, di_plus,
-            )
-            return
-
-        if adx < config.ADX_TREND_THRESHOLD:
-            log.info(
-                "❌ ADX filter rejected %s — ADX=%.1f < threshold %d (ranging market)",
-                symbol, adx, config.ADX_TREND_THRESHOLD,
-            )
-            return
-
-        log.info(
-            "✅ Pre-trade filters passed: %s | HTF EMA-200=✅ | ADX=%.1f DI+=%.1f DI-=%.1f",
-            symbol, adx, di_plus, di_minus,
-        )
-
-        # ── Preliminary entry / SL / TP for the AI proposal ──────────────────
-        entry_est = candles[-1]["close"]
-
-        # FIX #4 — ATR-based SL
         atr = calc_atr(symbol_df)
-        if atr > 0:
-            raw_sl = calculate_stop_loss_atr(entry_est, atr)
-        else:
-            raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
-
-        # USER INSIGHT + FIX #11 — swing high TP, fallback to fixed RR
-        if swing_tp_math and swing_tp_math > entry_est:
-            raw_tp = swing_tp_math
-            tp_source = "swing_high"
-        else:
-            raw_tp = calculate_take_profit(entry_est, raw_sl)
-            tp_source = "fixed_rr"
-
-        log.info(
-            "📐 Preliminary levels: entry≈%.6g SL=%.6g TP=%.6g (source=%s) ATR=%.6g",
-            entry_est, raw_sl, raw_tp, tp_source, atr,
-        )
-
-        # ── Sim trade entry (paper trade mirrors real signal) ─────────────────
-        asyncio.create_task(bot_state.push_sim_entry(
-            symbol=symbol,
-            timeframe=timeframe,
-            entry_price=entry_est,
-            stop_loss=raw_sl,
-            take_profit=raw_tp,
-        ))
-
-        # ── Fetch context DataFrames for AI ───────────────────────────────────
         btc_df = await self._get_df(config.BTC_SYMBOL, config.BTC_TIMEFRAME)
 
-        # ── Build AI proposal (v2 — richer context) ───────────────────────────
-        proposal = build_proposal(
-            symbol=symbol,
-            timeframe=timeframe,
-            entry_price=entry_est,
-            stop_loss=raw_sl,
-            take_profit=raw_tp,
-            confirmation_candle=conf_candle,
-            trendline_slope=trendline.slope if trendline else 0.0,
-            touch_proximity_pct=math_result.get("proximity_pct") or 0.0,
-            btc_df=btc_df,
-            symbol_df=symbol_df,
-            # ── v2 extra context ──
-            touch_count=touch_count,
-            vol_ratio=vol_ratio,
-            swing_tp_target=swing_tp_math,
-            tp_source=tp_source,
-            atr=atr,
-            adx=adx,
-            di_plus=di_plus,
-            di_minus=di_minus,
-            htf_above_ema=htf_above_ema,
-        )
+        for sig in strategy_signals:
+            strategy = sig["strategy"]
+            conf_candle = sig["confirmation_candle"]
+            entry_est = sig["entry_price"]
+            
+            # Extract strategy-specific or fallback fields
+            swing_tp_math = sig.get("swing_tp_target")
+            trendline = math_result.get("trendline")
+            trendline_slope = trendline.slope if trendline else 0.0
+            touch_count = math_result.get("touch_count", 0)
+            vol_ratio = math_result.get("vol_ratio", 1.0)
+            prox_pct = math_result.get("proximity_pct", 0.0)
 
-        # ── Claude gating ─────────────────────────────────────────────────────
-        decision = await self._ai.evaluate(proposal)
-
-        if not self._ai.should_proceed(decision):
             log.info(
-                "🤖 AI rejected: %s (conf=%.2f) — %s",
-                symbol,
-                decision.get("confidence", 0.0),
-                decision.get("reasoning", "")[:100],
+                "🎯 Signal detected: %s [%s] strategy=%s — running pre-trade filters...",
+                symbol, timeframe, strategy,
             )
-            await self._notifier.send(
-                Notifier.ai_rejected_msg(
-                    symbol=symbol,
-                    reason=decision.get("reasoning", "No reason given"),
-                    confidence=decision.get("confidence", 0.0),
+
+            # ── Strategy-specific Filters ─────────────────────────────────────
+            if strategy in ("bounce", "fvg"):
+                if not htf_above_ema:
+                    log.info("❌ HTF filter rejected %s (%s) — price is BELOW 200-EMA", symbol, strategy)
+                    continue
+                if config.ADX_REQUIRE_DIRECTION and di_minus >= di_plus:
+                    log.info("❌ ADX direction rejected %s (%s)", symbol, strategy)
+                    continue
+                if adx < config.ADX_TREND_THRESHOLD:
+                    log.info("❌ ADX filter rejected %s (%s) — ADX=%.1f (ranging)", symbol, strategy, adx)
+                    continue
+            elif strategy == "mean_reversion":
+                if adx >= config.ADX_TREND_THRESHOLD:
+                    log.info("❌ Mean Reversion rejected %s — ADX=%.1f (trending)", symbol, adx)
+                    continue
+
+            log.info("✅ Pre-trade filters passed for %s (strategy: %s)", symbol, strategy)
+
+            # ── Preliminary entry / SL / TP ──────────────────────────────────
+            raw_sl = sig.get("stop_loss")
+            if not raw_sl:
+                if atr > 0:
+                    raw_sl = calculate_stop_loss_atr(entry_est, atr)
+                else:
+                    raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
+                    
+            raw_tp = sig.get("take_profit")
+            tp_source = "strategy_default"
+            if not raw_tp:
+                if swing_tp_math and swing_tp_math > entry_est:
+                    raw_tp = swing_tp_math
+                    tp_source = "swing_high"
+                else:
+                    raw_tp = calculate_take_profit(entry_est, raw_sl)
+                    tp_source = "fixed_rr"
+
+            # ── Sim trade entry (mirrors real signal) ────────────────────────
+            asyncio.create_task(bot_state.push_sim_entry(
+                symbol=symbol,
+                timeframe=timeframe,
+                entry_price=entry_est,
+                stop_loss=raw_sl,
+                take_profit=raw_tp,
+                strategy=strategy,
+            ))
+
+            # ── Build AI proposal ─────────────────────────────────────────────
+            proposal = build_proposal(
+                strategy=strategy,
+                symbol=symbol,
+                timeframe=timeframe,
+                entry_price=entry_est,
+                stop_loss=raw_sl,
+                take_profit=raw_tp,
+                confirmation_candle=conf_candle,
+                trendline_slope=trendline_slope,
+                touch_proximity_pct=prox_pct,
+                btc_df=btc_df,
+                symbol_df=symbol_df,
+                touch_count=touch_count,
+                vol_ratio=vol_ratio,
+                swing_tp_target=swing_tp_math,
+                tp_source=tp_source,
+                atr=atr,
+                adx=adx,
+                di_plus=di_plus,
+                di_minus=di_minus,
+                htf_above_ema=htf_above_ema,
+            )
+
+            decision = await self._ai.evaluate(proposal)
+
+            if not self._ai.should_proceed(decision):
+                log.info("🤖 AI rejected %s (%s) conf=%.2f — %s", symbol, strategy, decision.get("confidence", 0.0), decision.get("reasoning", "")[:100])
+                await self._notifier.send(
+                    Notifier.ai_rejected_msg(
+                        symbol=symbol,
+                        reason=decision.get("reasoning", "No reason given"),
+                        confidence=decision.get("confidence", 0.0),
+                    )
                 )
+                continue # Try the next signal in the list
+
+            log.info("✅ AI approved %s for %s — executing limit buy", strategy, symbol)
+            
+            # ── Execute Limit Buy ─────────────────────────────────────────────
+            await self._execute_limit_buy(
+                symbol=symbol,
+                conf_candle=conf_candle,
+                atr=atr,
+                swing_tp=swing_tp_math,
+                target_sl=sig.get("stop_loss"),
+                target_tp=sig.get("take_profit"),
+                strategy=strategy,
             )
-            return
-
-        log.info(
-            "✅ AI approved: %s conf=%.2f — executing limit buy",
-            symbol, decision["confidence"],
-        )
-
-        # ── FIX #9 — Execute limit buy ────────────────────────────────────────
-        await self._execute_limit_buy(
-            symbol=symbol,
-            conf_candle=conf_candle,
-            atr=atr,
-            swing_tp=swing_tp_math,
-        )
+            # Break out so we don't attempt to enter multiple overlapping strategies at once on the same symbol
+            break
 
     # ── FIX #9 — Limit buy with fill tracking ────────────────────────────────
     async def _execute_limit_buy(
@@ -318,6 +306,9 @@ class ExecutionerAgent:
         conf_candle: dict,
         atr:       float,
         swing_tp:  Optional[float] = None,
+        target_sl: Optional[float] = None,
+        target_tp: Optional[float] = None,
+        strategy:  str = "bounce",
     ) -> None:
         """
         Place a limit buy at the current ask price (fills like a market order
@@ -346,14 +337,17 @@ class ExecutionerAgent:
                 log.error("Invalid ask price for %s — aborting buy", symbol)
                 return
 
-            # ── FIX #4 — ATR-based SL / TP ───────────────────────────────────
-            if atr > 0:
+            # ── SL / TP Calculation ──────────────────────────────────────────
+            if target_sl is not None:
+                stop_loss = target_sl
+            elif atr > 0:
                 stop_loss = calculate_stop_loss_atr(ask_price, atr)
             else:
                 stop_loss = calculate_stop_loss(ask_price, conf_candle["low"])
 
-            # USER INSIGHT — swing high TP or fixed-RR fallback
-            if swing_tp and swing_tp > ask_price:
+            if target_tp is not None:
+                take_profit = target_tp
+            elif swing_tp and swing_tp > ask_price:
                 take_profit = swing_tp
             else:
                 take_profit = calculate_take_profit(ask_price, stop_loss)
@@ -432,23 +426,28 @@ class ExecutionerAgent:
             )
 
             # Recalculate SL / TP on actual fill price
-            if atr > 0:
+            if target_sl is not None:
+                stop_loss = target_sl
+            elif atr > 0:
                 stop_loss = calculate_stop_loss_atr(filled_price, atr)
             else:
                 stop_loss = calculate_stop_loss(filled_price, conf_candle["low"])
 
-            if swing_tp and swing_tp > filled_price:
+            if target_tp is not None:
+                take_profit = target_tp
+            elif swing_tp and swing_tp > filled_price:
                 take_profit = swing_tp
             else:
                 take_profit = calculate_take_profit(filled_price, stop_loss)
 
             # ── Register with Warden ──────────────────────────────────────────
-            self._warden.open_position(
+            pos = self._warden.open_position(
                 symbol=symbol,
                 entry_price=filled_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
-                quantity=filled_qty,
+                quantity=float(order.get("filled", quantity)),
+                strategy=strategy,
             )
 
             # ── Telegram notification ─────────────────────────────────────────

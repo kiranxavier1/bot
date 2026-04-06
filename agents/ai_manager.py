@@ -62,6 +62,7 @@ def build_proposal(
     symbol_df,           # pd.DataFrame | None — symbol 15m candles
     base_currency:       Optional[str] = None,
     # ── v2 additions ──────────────────────────────────────────────────────────
+    strategy:            str   = "bounce",
     touch_count:         int   = 0,
     vol_ratio:           float = 1.0,
     swing_tp_target:     Optional[float] = None,
@@ -111,6 +112,7 @@ def build_proposal(
     # ── Assemble proposal ─────────────────────────────────────────────────────
     proposal: Dict[str, Any] = {
         "trade": {
+            "strategy":            strategy,
             "symbol":              symbol,
             "timeframe":           timeframe,
             "entry_price":         round(entry_price, 8),
@@ -156,14 +158,21 @@ def build_proposal(
             "btc_ok":          btc_sentiment in ("bullish", "neutral"),
             "rsi_ok":          (rsi_val is not None and 40 <= rsi_val <= 70),
         },
+        "continuous_learning_rules": [], # Injected dynamically prior to evaluation
         "request": (
-            "Evaluate this trendline bounce trade proposal. "
-            "The quality_checklist summarises each pre-trade filter result. "
+            "Evaluate this trade proposal. "
+            "You MUST rigidly respect any active rules listed in continuous_learning_rules. "
             "Return ONLY valid JSON with keys: "
             "decision (PROCEED or REJECT), confidence (0.0–1.0), "
             "reasoning (string), risks (list of strings)."
         ),
     }
+    
+    # Retrieve lessons for this strategy
+    from agents.post_mortem import RetrainingAgent
+    lessons = RetrainingAgent.load_lessons(strategy)
+    proposal["continuous_learning_rules"] = lessons
+    
     return proposal
 
 
@@ -173,35 +182,31 @@ _SYSTEM_PROMPT = """\
 You are a professional cryptocurrency risk manager reviewing trade proposals
 for an automated Binance Spot trading bot.
 
-Strategy: 3rd-Touch Trendline Bounce
-The bot detects rising trendlines (minimum 3 confirmed touches), waits for
-price to pull back to the trendline a 3rd+ time, and enters on a confirmed
-bounce candle.  Stop-loss is ATR-based (1.5× ATR-14).  Take-profit targets
-the previous swing high or a fixed 1.5:1 RR fallback.
+Strategies Supported
+────────────────────
+The bot executes 3 distinct strategies. The `trade.strategy` field tells you which triggered:
+1. "bounce" — 3rd-Touch Trendline Bounce. Requires an upward sloping trendline and price pulling back to support.
+2. "mean_reversion" — Bollinger Band Fade. Used ONLY in ranging markets (ADX < 25). Price dips below lower BB and closes inside.
+3. "fvg" — Fair Value Gap. Buying into a bullish imbalance zone (order block).
 
 Your evaluation criteria
 ────────────────────────
-1. BTC macro: avoid longs when BTC 1h trend is "bearish"
-2. Market regime: prefer "trending_up" (ADX ≥ 25, DI+ > DI-)
-3. RSI: avoid if RSI > 70 (overbought) or < 30 (momentum breakdown)
-   Prefer RSI 40–65 for bounce entries
-4. News: REJECT if news_safe is false
-5. R:R: minimum 1.5:1; prefer 2:1+
-6. Trendline quality:
-   - Positive (upward) slope is required for support bounces
-   - More touches = higher confidence
-7. Volume: confirmation candle volume_ratio ≥ 1.3 × average is meaningful
-8. HTF EMA-200: coin should be above its 200-EMA on the 1h timeframe
-9. The quality_checklist gives you a pre-computed pass/fail for each filter.
+1. BTC macro: avoid longs when BTC 1h trend is "bearish" (unless the strategy is extremely high quality or mean reversion).
+2. Market regime: 
+   - For "bounce" or "fvg", prefer "trending_up" (ADX ≥ 25, DI+ > DI-)
+   - For "mean_reversion", MUST be "ranging" (ADX < 25)
+3. News: REJECT if news_safe is false
+4. R:R: minimum 1.5:1; prefer 2:1+
+5. For "bounce" trades, check trendline quality (positive slope, touches >= 3).
+6. HTF EMA-200: for trend-following ("bounce"), coin should be above its 200-EMA.
+7. The quality_checklist gives you a pre-computed pass/fail for filters.
 
 Decision logic
 ──────────────
-• PROCEED only when the majority of quality checks pass and overall context
-  is favourable.  A confidence above 0.8 is reserved for high-quality setups
-  where almost all filters pass.
-• REJECT if BTC is bearish, news is bad, RSI > 70, or R:R < 1.5.
-• Be strict — false positives are expensive; false negatives merely miss one
-  trade.
+• CRITICAL: Read the `continuous_learning_rules` array. If ANY of those rules explicitly forbid the specific setup conditions you see in the proposal context, you MUST REJECT.
+• Evaluate strictly based on the specific strategy that triggered.
+• PROCEED only when the majority of strategy-specific quality checks pass.
+• REJECT if BTC is bearish, news is bad, or R:R < 1.5.
 
 Respond ONLY with valid JSON, no markdown:
 {

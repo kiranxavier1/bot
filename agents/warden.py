@@ -47,6 +47,7 @@ class Position:
     stop_loss:    float
     take_profit:  float
     quantity:     float          # base asset quantity
+    strategy:     str = "bounce"
     entry_ts:     float = field(default_factory=time.time)  # seconds epoch
     be_activated: bool = False   # True once SL was trailed via structure BE
 
@@ -251,6 +252,7 @@ class WardenAgent:
         stop_loss:   float,
         take_profit: float,
         quantity:    float,
+        strategy:    str = "bounce",
     ) -> Position:
         pos = Position(
             symbol=symbol,
@@ -258,6 +260,7 @@ class WardenAgent:
             stop_loss=stop_loss,
             take_profit=take_profit,
             quantity=quantity,
+            strategy=strategy,
         )
         self._positions[symbol] = pos
         log.info(
@@ -274,6 +277,7 @@ class WardenAgent:
             stop_loss=stop_loss,
             take_profit=take_profit,
             quantity=quantity,
+            strategy=strategy,
         ))
         return pos
 
@@ -362,7 +366,7 @@ class WardenAgent:
             )
 
             asyncio.create_task(bot_state.push_position_closed(
-                symbol=symbol, exit_price=pos.stop_loss, reason="SL"
+                symbol=symbol, exit_price=pos.stop_loss, reason="SL", strategy=pos.strategy
             ))
             self.close_position(symbol)
             self.set_cooldown(symbol)
@@ -388,7 +392,7 @@ class WardenAgent:
             )
 
             asyncio.create_task(bot_state.push_position_closed(
-                symbol=symbol, exit_price=pos.take_profit, reason="TP"
+                symbol=symbol, exit_price=pos.take_profit, reason="TP", strategy=pos.strategy
             ))
             self.close_position(symbol)
             return "TP"

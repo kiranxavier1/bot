@@ -82,6 +82,9 @@ class BotState:
             "ai_rejected":    0,
         }
 
+        # Queue for Strategy Retraining Agent
+        self.losing_trades_queue: asyncio.Queue = asyncio.Queue()
+
         # Subscribers — asyncio Queues that receive state snapshots on change
         self._subscribers: List[asyncio.Queue] = []
 
@@ -114,10 +117,12 @@ class BotState:
         stop_loss:   float,
         take_profit: float,
         quantity:    float,
+        strategy:    str = "bounce",
     ) -> None:
         async with self._lock:
             self.positions[symbol] = {
                 "symbol":       symbol,
+                "strategy":     strategy,
                 "entry":        entry,
                 "stop_loss":    stop_loss,
                 "take_profit":  take_profit,
@@ -152,6 +157,7 @@ class BotState:
         symbol:      str,
         exit_price:  float,
         reason:      str,   # "SL" | "TP" | "MANUAL"
+        strategy:    str = "bounce",
     ) -> None:
         async with self._lock:
             pos = self.positions.pop(symbol, None)
@@ -168,11 +174,18 @@ class BotState:
                 "sl":         pos.get("stop_loss"),
                 "tp":         pos.get("take_profit"),
                 "quantity":   pos.get("quantity"),
+                "strategy":   strategy,
                 "opened_at":  pos.get("opened_at"),
                 "closed_at":  _now_iso(),
+                "real":       True,
             }
             self._trades.appendleft(trade)
             self._recompute_stats_locked()
+            
+            # Phase 3: Pipe losing trades to Continuous Learning agent
+            if pnl_pct < 0 or reason == "SL":
+                self.losing_trades_queue.put_nowait(trade)
+                
         await self._broadcast()
 
     # ── AI decision events ────────────────────────────────────────────────────
@@ -243,6 +256,7 @@ class BotState:
         entry_price: float,
         stop_loss:   float,
         take_profit: float,
+        strategy:    str = "bounce",
     ) -> None:
         """Open a paper-trade position; stake = £50 or 5% of remaining balance."""
         async with self._lock:
@@ -254,6 +268,7 @@ class BotState:
             self._sim_open[symbol] = {
                 "symbol":       symbol,
                 "timeframe":    timeframe,
+                "strategy":     strategy,
                 "entry":        entry_price,
                 "stop_loss":    stop_loss,
                 "take_profit":  take_profit,
@@ -294,11 +309,17 @@ class BotState:
                     "pnl_gbp":    round(gbp_pnl, 2),
                     "stake_gbp":  stake,
                     "reason":     reason,
+                    "strategy":   pos.get("strategy", "bounce"),
                     "opened_at":  pos["opened_at"],
                     "closed_at":  _now_iso(),
+                    "real":       False,
                 }
                 self._sim_trades.appendleft(closed_trade)
                 del self._sim_open[symbol]
+                
+                # Phase 3: Pipe simulated losses to Retraining queue
+                if pnl_pct < 0 or reason == "SL":
+                    self.losing_trades_queue.put_nowait(closed_trade)
 
         if closed_trade is not None:
             await self._broadcast()

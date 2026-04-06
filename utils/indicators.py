@@ -14,6 +14,8 @@ volume_ratio(candle, df)         → float (candle vol / avg vol)  [FIX #1]
 btc_trend(df_1h)                 → "bullish" | "bearish" | "neutral"
 market_regime(df)                → ("trending"|"ranging", adx, di_plus, di_minus)
 fetch_news_sentiment(ccy, key)   → bool
+calc_bollinger_bands(df, p, std) → (upper, mid, lower)
+detect_fvg(df, lookback)         → List of active Bullish FVGs
 ─────────────────────────────────────────────────────────────────────────────
 """
 
@@ -250,3 +252,75 @@ def fetch_news_sentiment(base_currency: str, api_key: Optional[str] = None) -> b
     except Exception as exc:
         log.warning("News fetch failed for %s: %s — defaulting safe", base_currency, exc)
         return True
+
+
+# ── Bollinger Bands ───────────────────────────────────────────────────────────
+def calc_bollinger_bands(df: pd.DataFrame, period: int = 20, std_dev: float = 2.0) -> Tuple[float, float, float]:
+    """
+    Returns the most recent (Upper, Middle, Lower) Bollinger Band values.
+    Used for Mean Reversion strategy.
+    """
+    try:
+        close = df["close"].astype(float)
+        mid = close.rolling(window=period).mean()
+        std = close.rolling(window=period).std()
+        upper = mid + (std * std_dev)
+        lower = mid - (std * std_dev)
+        return float(upper.iloc[-1]), float(mid.iloc[-1]), float(lower.iloc[-1])
+    except Exception as exc:
+        log.warning("Bollinger Bands failed: %s", exc)
+        return 0.0, 0.0, 0.0
+
+
+# ── Fair Value Gaps (SMC) ─────────────────────────────────────────────────────
+def detect_fvg(df: pd.DataFrame, lookback: int = 20) -> list[dict]:
+    """
+    Detects recent Bullish Fair Value Gaps (FVG) / Imbalances.
+    A bullish FVG occurs over 3 candles when Candle 1 High < Candle 3 Low.
+    Returns a list of active gap zones (not yet mitigated/filled by price).
+    """
+    try:
+        highs = df["high"].astype(float).values
+        lows = df["low"].astype(float).values
+        closes = df["close"].astype(float).values
+        timestamps = df["timestamp"].values
+
+        n = len(df)
+        active_fvgs = []
+
+        start_idx = max(0, n - lookback)
+        # We need sequences of 3 candles (i-2, i-1, i)
+        for i in range(start_idx + 2, n):
+            c1_high = highs[i-2]
+            c3_low = lows[i]
+
+            # Bullish FVG: Strong move up leaving a gap between C1 high and C3 low
+            if c3_low > c1_high:
+                gap_top = c3_low
+                gap_bottom = c1_high
+                gap_size = (gap_top - gap_bottom) / gap_bottom
+
+                # Only consider meaningful gaps (>0.1%)
+                if gap_size > 0.001:
+                    # Check if mitigated by any candle AFTER candle 3
+                    mitigated = False
+                    for j in range(i + 1, n):
+                        if lows[j] <= gap_bottom:
+                            mitigated = True
+                            break
+                    
+                    if not mitigated:
+                        active_fvgs.append({
+                            "top": gap_top,
+                            "bottom": gap_bottom,
+                            "mid": (gap_top + gap_bottom) / 2,
+                            "timestamp": int(timestamps[i-1]), # The impulse candle
+                            "size_pct": round(gap_size * 100, 3)
+                        })
+
+        # Return the most recent FVGs first
+        return active_fvgs[::-1]
+    except Exception as exc:
+        log.warning("FVG detection failed: %s", exc)
+        return []
+

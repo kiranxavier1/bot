@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 import config
-from utils.indicators import volume_ratio
+from utils.indicators import volume_ratio, calc_bollinger_bands, detect_fvg, market_regime
 
 log = logging.getLogger(__name__)
 
@@ -327,6 +327,7 @@ class MathematicianAgent:
             "confirmation_candle": None,
             "swing_tp_target":     None,
             "vol_ratio":           1.0,
+            "strategy_signals":    [],
         }
 
         if len(candles) < 2 * config.PIVOT_N + 5:
@@ -402,15 +403,75 @@ class MathematicianAgent:
                 state.armed = False
 
                 # USER INSIGHT — swing high TP target
-                # (SL not known yet — placeholder uses trendline as rough SL proxy)
                 rough_sl = tl_price_now * 0.985
                 swing_tp = find_swing_tp_target(candles, conf["close"], rough_sl)
                 result["swing_tp_target"] = swing_tp
 
+                result["strategy_signals"].append({
+                    "strategy": "bounce",
+                    "entry_price": float(conf["close"]),
+                    "stop_loss": float(tl_price_now * 0.998), # tight SL 0.2% below trendline break
+                    "swing_tp_target": swing_tp,
+                    "confirmation_candle": conf,
+                })
+
                 log.info(
-                    "🎯 SIGNAL: %s [%s] close=%.6g | swing_tp=%s",
+                    "🎯 BOUNCE SIGNAL: %s [%s] close=%.6g | swing_tp=%s",
                     symbol, timeframe, conf["close"],
                     f"{swing_tp:.6g}" if swing_tp else "None (fallback RR)",
                 )
+
+        # ── Strategy 2: Mean Reversion (Bollinger Band Fade) ──────────────────
+        # Logic: If market is ranging (ADX < 25), and candle closes back inside lower BB
+        regime, adx, _, _ = market_regime(df)
+        if adx < config.ADX_TREND_THRESHOLD:
+            upper, mid, lower = calc_bollinger_bands(df)
+            last_closed = candles[-2] if len(candles) > 1 else live_candle
+            if last_closed["low"] < lower and last_closed["close"] > lower:
+                # Strong rejection from the lower band in a ranging market
+                result["strategy_signals"].append({
+                    "strategy": "mean_reversion",
+                    "entry_price": float(last_closed["close"]),
+                    "stop_loss": float(last_closed["low"] * 0.998), # tight SL just below the wick
+                    "take_profit": float(mid), # TP at the SMA (middle band)
+                    "confirmation_candle": last_closed,
+                    "adx": adx,
+                })
+                log.info("🎯 MEAN REVERSION SIGNAL: %s [%s] bounced off lower BB in ranging market (ADX=%.1f)", symbol, timeframe, adx)
+
+        # ── Strategy 3: Fair Value Gap (SMC) ──────────────────────────────────
+        # Logic: Bullish FVG exists, and price just dipped into it
+        fvgs = detect_fvg(df)
+        for fvg in fvgs:
+            # If the current price is inside the FVG zone, that's a signal to buy the imbalance
+            if fvg["bottom"] <= live_close <= fvg["top"]:
+                result["strategy_signals"].append({
+                    "strategy": "fvg",
+                    "entry_price": float(live_close),
+                    "stop_loss": float(fvg["bottom"] * 0.995), # SL just below the FVG
+                    "take_profit": float(fvg["top"] + (fvg["top"] - fvg["bottom"]) * 2), # 1:2 RR baseline minimum
+                    "confirmation_candle": live_candle,
+                    "fvg": fvg,
+                })
+                log.info("🎯 FVG SIGNAL: %s [%s] dipped into active FVG zone. bottom=%.6g, top=%.6g", symbol, timeframe, fvg["bottom"], fvg["top"])
+                break  # only trigger on the first matching FVG
+
+        # ── Strategy 1: Breakout Momentum ─────────────────────────────────────
+        # Logic: Current candle closes ABOVE recent major resistance with 2x+ volume
+        recent_highs = find_pivot_highs(candles, n=15)
+        if recent_highs:
+            highest_resistance = max(h.high for h in recent_highs)
+            last_closed = candles[-2] if len(candles) > 1 else live_candle
+            vol_rat = volume_ratio(last_closed, df)
+            
+            if last_closed["close"] > highest_resistance and vol_rat >= 2.0:
+                result["strategy_signals"].append({
+                    "strategy": "breakout",
+                    "entry_price": float(last_closed["close"]),
+                    "stop_loss": float(highest_resistance * 0.99), # SL just below breakout line
+                    "take_profit": float(last_closed["close"] + (last_closed["close"] - highest_resistance) * 2), # 1:2 RR minimum
+                    "confirmation_candle": last_closed,
+                })
+                log.info("🎯 BREAKOUT SIGNAL: %s [%s] closed above resistance %.6g with vol_ratio=%.2f", symbol, timeframe, highest_resistance, vol_rat)
 
         return result

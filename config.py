@@ -40,7 +40,8 @@ QUOTE_CURRENCY     = "USDT"
 
 # FIX #9 — Primary signal timeframe is 15m; 5m used for precise entry timing.
 # Both are streamed via WebSocket so the buffer is always warm.
-TIMEFRAMES         = ["5m", "15m"]
+# Using 30m instead of 20m for bigger picture because Binance does not natively support 20m
+TIMEFRAMES         = ["5m", "15m", "30m"]
 SIGNAL_TIMEFRAME   = "15m"     # trendline pattern detection
 ENTRY_TIMEFRAME    = "5m"      # precise entry confirmation candle
 
@@ -66,8 +67,9 @@ CRYPTOPANIC_API_KEY = _optional("CRYPTOPANIC_API_KEY")
 PIVOT_N            = int(_optional("PIVOT_N", "5"))
 WATCHER_PROXIMITY  = float(_optional("WATCHER_PROXIMITY", "0.005"))   # 0.5 %
 
-# FIX #10 — require N confirmed touches before the trendline is considered valid
-MIN_TRENDLINE_TOUCHES = 3
+# Required validated touches before trading. 
+# 2 touches define the line -> enter trade on the 3rd touch!
+MIN_TRENDLINE_TOUCHES = 2
 
 # FIX #5 — trendline slope bounds (price-change per 15m candle as a fraction)
 # Rejects near-flat noise AND unsustainably steep lines.
@@ -87,9 +89,9 @@ ATR_PERIOD     = 14
 ATR_MULTIPLIER = float(_optional("ATR_MULTIPLIER", "1.5"))   # SL = entry − 1.5×ATR
 
 # FIX #11 + USER SWING INSIGHT — target just below previous swing high
-# If no valid swing high found, fall back to min RR ratio below
+# If no valid swing high found, fall back to min RR ratio below (User requested 3-4x profit risk)
 SWING_TP_BUFFER   = 0.005    # sell 0.5 % below the previous swing high
-MIN_RR_FALLBACK   = 1.5      # minimum R:R if no structural TP available
+MIN_RR_FALLBACK   = 3.0      # minimum R:R if no structural TP available
 
 # FIX #8 — structure-based break-even: trail SL below the most recent pivot low
 # formed AFTER entry, rather than a fixed +5 % price level
