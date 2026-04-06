@@ -125,7 +125,7 @@ async def main() -> None:
     log.info("=" * 60)
     log.info("  3rd Touch Trendline Bot — starting up")
     log.info("  Exchange  : Binance %s", "Futures" if config.USE_FUTURES else "Spot")
-    log.info("  AI Model  : %s", config.CLAUDE_MODEL)
+    log.info("  AI Model  : %s", config.GEMINI_MODEL)
     log.info("  Top pairs : %d", config.TOP_N_PAIRS)
     log.info("  Timeframes: %s", config.TIMEFRAMES)
     log.info("=" * 60)
@@ -185,7 +185,7 @@ async def main() -> None:
         f"Exchange  : Binance {'Futures' if config.USE_FUTURES else 'Spot'}\n"
         f"Pairs     : {len(symbols)} USDT symbols\n"
         f"Timeframes: {', '.join(config.TIMEFRAMES)}\n"
-        f"AI model  : <code>{config.CLAUDE_MODEL}</code>"
+        f"AI model  : <code>{config.GEMINI_MODEL}</code>"
     )
 
     # ── 7. Background tasks ───────────────────────────────────────────────────
