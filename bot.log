@@ -1,0 +1,665 @@
+2026-04-06 02:28:29 | INFO     | root                           | Logging initialised  →  file=bot.log  level=INFO
+2026-04-06 02:28:29 | INFO     | main                           | ============================================================
+2026-04-06 02:28:29 | INFO     | main                           |   3rd Touch Trendline Bot — starting up
+2026-04-06 02:28:29 | INFO     | main                           |   Exchange  : Binance Spot
+2026-04-06 02:28:29 | INFO     | main                           |   AI Model  : claude-sonnet-4-6
+2026-04-06 02:28:29 | INFO     | main                           |   Top pairs : 50
+2026-04-06 02:28:29 | INFO     | main                           |   Timeframes: ['5m', '15m']
+2026-04-06 02:28:29 | INFO     | main                           | ============================================================
+2026-04-06 02:28:29 | INFO     | main                           | ScoutAgent initialised with shared exchange connection
+2026-04-06 02:28:29 | WARNING  | main                           | BTC 1h seed failed: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:28:29 | ERROR    | agents.scout                   | Symbol discovery failed: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:28:29 | WARNING  | agents.scout                   | REST seed failed for BTC/USDT 5m: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:28:29 | WARNING  | agents.scout                   | WS stream error BTC/USDT 5m — reconnecting in 1s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:30 | WARNING  | agents.scout                   | REST seed failed for BTC/USDT 15m: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:28:30 | INFO     | agents.scout                   | Added symbol to pool: BTC/USDT
+2026-04-06 02:28:30 | INFO     | main                           | Initial pool: 1 symbols × 2 timeframes
+2026-04-06 02:28:30 | WARNING  | agents.scout                   | WS stream error BTC/USDT 15m — reconnecting in 1s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:30 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 02:28:30 | INFO     | main                           | All tasks started — bot is running.  Press Ctrl-C to stop.
+2026-04-06 02:28:30 | INFO     | main                           | 📊 Dashboard → http://localhost:8000
+2026-04-06 02:28:30 | WARNING  | main                           | BTC 1h stream error — reconnecting in 1s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:30 | INFO     | web.server                     | Dashboard available at http://localhost:8000
+2026-04-06 02:28:30 | ERROR    | agents.scout                   | Symbol discovery failed: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:28:30 | WARNING  | agents.scout                   | WS stream error BTC/USDT 5m — reconnecting in 2s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:31 | WARNING  | agents.scout                   | WS stream error BTC/USDT 15m — reconnecting in 2s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:31 | WARNING  | main                           | BTC 1h stream error — reconnecting in 2s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:32 | WARNING  | agents.scout                   | WS stream error BTC/USDT 5m — reconnecting in 4s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:33 | WARNING  | agents.scout                   | WS stream error BTC/USDT 15m — reconnecting in 4s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:33 | WARNING  | main                           | BTC 1h stream error — reconnecting in 4s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:36 | WARNING  | agents.scout                   | WS stream error BTC/USDT 5m — reconnecting in 8s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:37 | WARNING  | agents.scout                   | WS stream error BTC/USDT 15m — reconnecting in 8s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:37 | WARNING  | main                           | BTC 1h stream error — reconnecting in 8s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:44 | WARNING  | agents.scout                   | WS stream error BTC/USDT 5m — reconnecting in 16s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:45 | WARNING  | agents.scout                   | WS stream error BTC/USDT 15m — reconnecting in 16s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:45 | WARNING  | main                           | BTC 1h stream error — reconnecting in 16s: 'async for' requires an object with __aiter__ method, got coroutine
+2026-04-06 02:28:47 | INFO     | main                           | Signal 15 received — initiating shutdown
+2026-04-06 02:28:47 | INFO     | main                           | Shutdown signal received — cleaning up...
+2026-04-06 02:28:48 | INFO     | agents.scout                   | ScoutAgent stopped — exchange connection closed.
+2026-04-06 02:28:48 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 02:28:48 | INFO     | main                           | Bot stopped cleanly.
+2026-04-06 02:30:28 | INFO     | root                           | Logging initialised  →  file=bot.log  level=INFO
+2026-04-06 02:30:28 | INFO     | main                           | ============================================================
+2026-04-06 02:30:28 | INFO     | main                           |   3rd Touch Trendline Bot — starting up
+2026-04-06 02:30:28 | INFO     | main                           |   Exchange  : Binance Spot
+2026-04-06 02:30:28 | INFO     | main                           |   AI Model  : claude-sonnet-4-6
+2026-04-06 02:30:28 | INFO     | main                           |   Top pairs : 50
+2026-04-06 02:30:28 | INFO     | main                           |   Timeframes: ['5m', '15m']
+2026-04-06 02:30:28 | INFO     | main                           | ============================================================
+2026-04-06 02:30:28 | INFO     | agents.scout                   | ScoutAgent started — exchange: binance (spot)
+2026-04-06 02:30:28 | INFO     | main                           | ScoutAgent initialised with shared exchange connection
+2026-04-06 02:30:29 | INFO     | main                           | BTC 1h buffer seeded: 200 candles
+2026-04-06 02:30:31 | INFO     | agents.scout                   | Symbol discovery: found 50 top USDT pairs
+2026-04-06 02:30:33 | INFO     | agents.scout                   | Added symbol to pool: NEAR/USDT
+2026-04-06 02:30:33 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:33 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:33 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:33 | INFO     | agents.scout                   | Added symbol to pool: PEPE/USDT
+2026-04-06 02:30:33 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error MMT/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | INFO     | agents.scout                   | Added symbol to pool: MMT/USDT
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error MMT/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error TRU/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | INFO     | agents.scout                   | Added symbol to pool: TRU/USDT
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error TRU/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:34 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:35 | WARNING  | agents.scout                   | WS stream error BCH/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:35 | WARNING  | agents.scout                   | WS stream error MMT/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:35 | INFO     | agents.scout                   | Added symbol to pool: BCH/USDT
+2026-04-06 02:30:35 | WARNING  | agents.scout                   | WS stream error BCH/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:35 | WARNING  | agents.scout                   | WS stream error MMT/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:35 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:35 | WARNING  | agents.scout                   | WS stream error TRU/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:35 | INFO     | agents.scout                   | Added symbol to pool: DOGE/USDT
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error TRU/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error STO/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error BCH/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | INFO     | agents.scout                   | Added symbol to pool: STO/USDT
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error STO/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error BCH/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:36 | INFO     | agents.scout                   | Added symbol to pool: ZEC/USDT
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error MMT/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error STO/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | INFO     | agents.scout                   | Added symbol to pool: PIXEL/USDT
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error MMT/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error STO/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error TRU/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:37 | INFO     | agents.scout                   | Added symbol to pool: SHIB/USDT
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error TRU/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error BCH/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | INFO     | agents.scout                   | Added symbol to pool: ALGO/USDT
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error BCH/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error FET/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:38 | INFO     | agents.scout                   | Added symbol to pool: FET/USDT
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error FET/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error STO/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | INFO     | agents.scout                   | Added symbol to pool: AAVE/USDT
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error STO/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error NOM/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | WARNING  | agents.scout                   | WS stream error FET/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:39 | INFO     | agents.scout                   | Added symbol to pool: NOM/USDT
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error NOM/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error FET/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error BNB/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | INFO     | agents.scout                   | Added symbol to pool: BNB/USDT
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error BNB/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | WARNING  | agents.scout                   | WS stream error NOM/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:40 | INFO     | agents.scout                   | Added symbol to pool: PAXG/USDT
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error NOM/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error MMT/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error BNB/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | INFO     | agents.scout                   | Added symbol to pool: FDUSD/USDT
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error MMT/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:41 | WARNING  | agents.scout                   | WS stream error BNB/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error SUI/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error TRU/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error FET/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | INFO     | agents.scout                   | Added symbol to pool: SUI/USDT
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error SUI/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error TRU/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error FET/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error U/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error BCH/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | INFO     | agents.scout                   | Added symbol to pool: U/USDT
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error U/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error BCH/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:42 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error XPL/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error NOM/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error SUI/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | INFO     | agents.scout                   | Added symbol to pool: XPL/USDT
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error XPL/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error NOM/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error SUI/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error USDC/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error STO/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error BNB/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error U/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | INFO     | agents.scout                   | Added symbol to pool: USDC/USDT
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error USDC/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error STO/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error BNB/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:43 | WARNING  | agents.scout                   | WS stream error U/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error XPL/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error ZEC/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error XPL/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | INFO     | agents.scout                   | Added symbol to pool: 币安人生/USDT
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error USDC/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error PIXEL/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error BONK/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:44 | WARNING  | agents.scout                   | WS stream error USDC/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | INFO     | agents.scout                   | Added symbol to pool: BONK/USDT
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error BONK/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error SUI/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error SHIB/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error ENA/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error SUI/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | INFO     | agents.scout                   | Added symbol to pool: ENA/USDT
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error U/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error ENA/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error ALGO/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error U/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error GIGGLE/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:45 | WARNING  | agents.scout                   | WS stream error BONK/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | INFO     | agents.scout                   | Added symbol to pool: GIGGLE/USDT
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error FET/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error XPL/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error GIGGLE/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error BONK/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error FET/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error XRP/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error XPL/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error ENA/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | INFO     | agents.scout                   | Added symbol to pool: XRP/USDT
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error XRP/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error USDC/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:46 | WARNING  | agents.scout                   | WS stream error ENA/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error AAVE/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error AVAX/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error USDC/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error GIGGLE/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | INFO     | agents.scout                   | Added symbol to pool: AVAX/USDT
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error NOM/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error AVAX/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error GIGGLE/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error NOM/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error REZ/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error XRP/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | INFO     | agents.scout                   | Added symbol to pool: REZ/USDT
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error BNB/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error REZ/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:47 | WARNING  | agents.scout                   | WS stream error XRP/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error BNB/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error USD1/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error BONK/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error AVAX/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | INFO     | agents.scout                   | Added symbol to pool: USD1/USDT
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error USD1/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error BONK/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error AVAX/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error ADA/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error PAXG/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error ENA/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error REZ/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | INFO     | agents.scout                   | Added symbol to pool: ADA/USDT
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error ADA/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 5m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error NEAR/USDT 15m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error ENA/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:48 | WARNING  | agents.scout                   | WS stream error REZ/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error XAUT/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error FDUSD/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 5m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error GIGGLE/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error USD1/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | INFO     | agents.scout                   | Added symbol to pool: XAUT/USDT
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error SUI/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error XAUT/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error PEPE/USDT 15m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error GIGGLE/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error USD1/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error SUI/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error LINK/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error MMT/USDT 5m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error XRP/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | WARNING  | agents.scout                   | WS stream error ADA/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:49 | INFO     | agents.scout                   | Added symbol to pool: LINK/USDT
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error U/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error LINK/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error MMT/USDT 15m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error XRP/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error ADA/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error U/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error NIGHT/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error TRU/USDT 5m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | INFO     | agents.scout                   | Added symbol to pool: NIGHT/USDT
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error AVAX/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error XAUT/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error NIGHT/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error XPL/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error TRU/USDT 15m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error AVAX/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error XAUT/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error XPL/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error BCH/USDT 5m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error RENDER/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | INFO     | agents.scout                   | Added symbol to pool: RENDER/USDT
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error REZ/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error LINK/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error USDC/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error BCH/USDT 15m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:50 | WARNING  | agents.scout                   | WS stream error RENDER/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error REZ/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error LINK/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error USDC/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error NIGHT/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error BANANAS31/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 5m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | INFO     | agents.scout                   | Added symbol to pool: BANANAS31/USDT
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error USD1/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error DOGE/USDT 15m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 5m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error BANANAS31/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error NIGHT/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error USD1/USDT 15m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error STO/USDT 5m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error XLM/USDT 5m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error RENDER/USDT 5m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | INFO     | agents.scout                   | Added symbol to pool: XLM/USDT
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error ADA/USDT 5m — reconnecting in 4s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error STO/USDT 15m — reconnecting in 16s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error 币安人生/USDT 15m — reconnecting in 8s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error XLM/USDT 15m — reconnecting in 1s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:51 | WARNING  | agents.scout                   | WS stream error RENDER/USDT 15m — reconnecting in 2s: binance {"code":-2008,"msg":"Invalid Api-Key ID."}
+2026-04-06 02:30:52 | INFO     | main                           | Signal 15 received — initiating shutdown
+2026-04-06 02:30:52 | WARNING  | ccxt.base.exchange             | binance requires to release all resources with an explicit call to the .close() coroutine. If you are using the exchange instance with async coroutines, add `await exchange.close()` to your code into a place when you're done with the exchange and don't need the exchange instance anymore (at the end of your async coroutine).
+2026-04-06 02:30:52 | ERROR    | asyncio                        | Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0xfc97e2bce680>, 316.890647953), (<aiohttp.client_proto.ResponseHandler object at 0xfc97f212e560>, 317.097724799), (<aiohttp.client_proto.ResponseHandler object at 0xfc97e2bcf100>, 317.147730902)])']
+connector: <aiohttp.connector.TCPConnector object at 0xfc97f20f7130>
+2026-04-06 02:30:52 | WARNING  | ccxt.base.exchange             | binance requires to release all resources with an explicit call to the .close() coroutine. If you are using the exchange instance with async coroutines, add `await exchange.close()` to your code into a place when you're done with the exchange and don't need the exchange instance anymore (at the end of your async coroutine).
+2026-04-06 02:30:52 | ERROR    | asyncio                        | Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0xfc97f212e380>, 296.297414879)])']
+connector: <aiohttp.connector.TCPConnector object at 0xfc97f222e380>
+2026-04-06 02:31:24 | INFO     | root                           | Logging initialised  →  file=bot.log  level=INFO
+2026-04-06 02:31:24 | INFO     | main                           | ============================================================
+2026-04-06 02:31:24 | INFO     | main                           |   3rd Touch Trendline Bot — starting up
+2026-04-06 02:31:24 | INFO     | main                           |   Exchange  : Binance Spot
+2026-04-06 02:31:24 | INFO     | main                           |   AI Model  : claude-sonnet-4-6
+2026-04-06 02:31:24 | INFO     | main                           |   Top pairs : 50
+2026-04-06 02:31:24 | INFO     | main                           |   Timeframes: ['5m', '15m']
+2026-04-06 02:31:24 | INFO     | main                           | ============================================================
+2026-04-06 02:31:24 | INFO     | agents.scout                   | ScoutAgent started — exchange: binance (spot)
+2026-04-06 02:31:24 | INFO     | main                           | ScoutAgent initialised with shared exchange connection
+2026-04-06 02:31:26 | INFO     | main                           | BTC 1h buffer seeded: 200 candles
+2026-04-06 02:31:28 | INFO     | agents.scout                   | Symbol discovery: found 50 top USDT pairs
+2026-04-06 02:31:29 | INFO     | agents.scout                   | Added symbol to pool: SHIB/USDT
+2026-04-06 02:31:30 | INFO     | agents.scout                   | Added symbol to pool: TRU/USDT
+2026-04-06 02:31:30 | INFO     | agents.scout                   | Added symbol to pool: RENDER/USDT
+2026-04-06 02:31:31 | INFO     | agents.scout                   | Added symbol to pool: LINK/USDT
+2026-04-06 02:31:31 | INFO     | agents.scout                   | Added symbol to pool: SOL/USDT
+2026-04-06 02:31:32 | INFO     | agents.scout                   | Added symbol to pool: PEPE/USDT
+2026-04-06 02:31:32 | INFO     | agents.scout                   | Added symbol to pool: NIGHT/USDT
+2026-04-06 02:31:33 | INFO     | agents.scout                   | Added symbol to pool: TAO/USDT
+2026-04-06 02:31:33 | INFO     | agents.scout                   | Added symbol to pool: DOGE/USDT
+2026-04-06 02:31:34 | INFO     | agents.scout                   | Added symbol to pool: LTC/USDT
+2026-04-06 02:31:35 | INFO     | agents.scout                   | Added symbol to pool: NOM/USDT
+2026-04-06 02:31:35 | INFO     | agents.scout                   | Added symbol to pool: XLM/USDT
+2026-04-06 02:31:36 | INFO     | agents.scout                   | Added symbol to pool: XPL/USDT
+2026-04-06 02:31:36 | INFO     | agents.scout                   | Added symbol to pool: SOLV/USDT
+2026-04-06 02:31:37 | INFO     | agents.scout                   | Added symbol to pool: XRP/USDT
+2026-04-06 02:31:37 | INFO     | agents.scout                   | Added symbol to pool: XAUT/USDT
+2026-04-06 02:31:38 | INFO     | agents.scout                   | Added symbol to pool: BANANAS31/USDT
+2026-04-06 02:31:38 | INFO     | agents.scout                   | Added symbol to pool: FDUSD/USDT
+2026-04-06 02:31:39 | INFO     | agents.scout                   | Added symbol to pool: TRX/USDT
+2026-04-06 02:31:39 | INFO     | agents.scout                   | Added symbol to pool: ENA/USDT
+2026-04-06 02:31:40 | INFO     | agents.scout                   | Added symbol to pool: KITE/USDT
+2026-04-06 02:31:40 | INFO     | agents.scout                   | Added symbol to pool: AVAX/USDT
+2026-04-06 02:31:41 | INFO     | agents.scout                   | Added symbol to pool: USDC/USDT
+2026-04-06 02:31:41 | INFO     | agents.scout                   | Added symbol to pool: EUR/USDT
+2026-04-06 02:31:42 | INFO     | agents.scout                   | Added symbol to pool: BONK/USDT
+2026-04-06 02:31:42 | INFO     | agents.scout                   | Added symbol to pool: REZ/USDT
+2026-04-06 02:31:43 | INFO     | agents.scout                   | Added symbol to pool: FET/USDT
+2026-04-06 02:31:44 | INFO     | agents.scout                   | Added symbol to pool: GIGGLE/USDT
+2026-04-06 02:31:44 | INFO     | agents.scout                   | Added symbol to pool: NEAR/USDT
+2026-04-06 02:31:45 | INFO     | agents.scout                   | Added symbol to pool: ME/USDT
+2026-04-06 02:31:45 | INFO     | agents.scout                   | Added symbol to pool: SUI/USDT
+2026-04-06 02:31:46 | INFO     | agents.scout                   | Added symbol to pool: MMT/USDT
+2026-04-06 02:31:46 | INFO     | agents.scout                   | Added symbol to pool: BCH/USDT
+2026-04-06 02:31:47 | INFO     | agents.scout                   | Added symbol to pool: USD1/USDT
+2026-04-06 02:31:47 | INFO     | agents.scout                   | Added symbol to pool: 币安人生/USDT
+2026-04-06 02:31:48 | INFO     | agents.scout                   | Added symbol to pool: PIXEL/USDT
+2026-04-06 02:31:48 | INFO     | agents.scout                   | Added symbol to pool: BNB/USDT
+2026-04-06 02:31:49 | INFO     | agents.scout                   | Added symbol to pool: ZEC/USDT
+2026-04-06 02:31:49 | INFO     | agents.scout                   | Added symbol to pool: DOT/USDT
+2026-04-06 02:31:50 | INFO     | agents.scout                   | Added symbol to pool: BTC/USDT
+2026-04-06 02:31:50 | INFO     | agents.scout                   | Added symbol to pool: STO/USDT
+2026-04-06 02:31:51 | INFO     | agents.scout                   | Added symbol to pool: ETH/USDT
+2026-04-06 02:31:52 | INFO     | agents.scout                   | Added symbol to pool: WLD/USDT
+2026-04-06 02:31:52 | INFO     | agents.scout                   | Added symbol to pool: AAVE/USDT
+2026-04-06 02:31:53 | INFO     | agents.scout                   | Added symbol to pool: U/USDT
+2026-04-06 02:31:53 | INFO     | main                           | Signal 15 received — initiating shutdown
+2026-04-06 02:31:53 | ERROR    | asyncio                        | Exception in callback Client.receive_loop.<locals>.after_interrupt(<Task cancell...nt_ws.py:312>>) at /sessions/compassionate-jolly-bohr/.local/lib/python3.10/site-packages/ccxt/async_support/base/ws/client.py:136
+handle: <Handle Client.receive_loop.<locals>.after_interrupt(<Task cancell...nt_ws.py:312>>) at /sessions/compassionate-jolly-bohr/.local/lib/python3.10/site-packages/ccxt/async_support/base/ws/client.py:136>
+Traceback (most recent call last):
+  File "/sessions/compassionate-jolly-bohr/.local/lib/python3.10/site-packages/aiohttp/client_ws.py", line 336, in receive
+    msg = await self._reader.read()
+  File "aiohttp/_websocket/reader_c.py", line 118, in read
+  File "aiohttp/_websocket/reader_c.py", line 115, in aiohttp._websocket.reader_c.WebSocketDataQueue.read
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/asyncio/events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "/sessions/compassionate-jolly-bohr/.local/lib/python3.10/site-packages/ccxt/async_support/base/ws/client.py", line 137, in after_interrupt
+    exception = resolved.exception()
+asyncio.exceptions.CancelledError
+2026-04-06 02:31:53 | WARNING  | ccxt.base.exchange             | binance requires to release all resources with an explicit call to the .close() coroutine. If you are using the exchange instance with async coroutines, add `await exchange.close()` to your code into a place when you're done with the exchange and don't need the exchange instance anymore (at the end of your async coroutine).
+2026-04-06 02:31:53 | ERROR    | asyncio                        | Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0xe3c79fd362c0>
+2026-04-06 08:54:02 | INFO     | root                           | Logging initialised  →  file=bot.log  level=INFO
+2026-04-06 08:54:02 | INFO     | main                           | ============================================================
+2026-04-06 08:54:02 | INFO     | main                           |   3rd Touch Trendline Bot — starting up
+2026-04-06 08:54:02 | INFO     | main                           |   Exchange  : Binance Spot
+2026-04-06 08:54:02 | INFO     | main                           |   AI Model  : claude-sonnet-4-6
+2026-04-06 08:54:02 | INFO     | main                           |   Top pairs : 50
+2026-04-06 08:54:02 | INFO     | main                           |   Timeframes: ['5m', '15m']
+2026-04-06 08:54:02 | INFO     | main                           | ============================================================
+2026-04-06 08:54:02 | INFO     | agents.scout                   | ScoutAgent started — exchange: binance (spot)
+2026-04-06 08:54:02 | INFO     | main                           | ScoutAgent initialised with shared exchange connection
+2026-04-06 08:54:04 | INFO     | main                           | BTC 1h buffer seeded: 200 candles
+2026-04-06 08:54:06 | INFO     | agents.scout                   | Symbol discovery: found 50 top USDT pairs
+2026-04-06 08:54:07 | INFO     | agents.scout                   | Added symbol to pool: DOGE/USDT
+2026-04-06 08:54:07 | INFO     | agents.scout                   | Added symbol to pool: PEPE/USDT
+2026-04-06 08:54:08 | INFO     | agents.scout                   | Added symbol to pool: KITE/USDT
+2026-04-06 08:54:08 | INFO     | agents.scout                   | Added symbol to pool: SHIB/USDT
+2026-04-06 08:54:09 | INFO     | agents.scout                   | Added symbol to pool: NEAR/USDT
+2026-04-06 08:54:10 | INFO     | agents.scout                   | Added symbol to pool: FET/USDT
+2026-04-06 08:54:10 | INFO     | agents.scout                   | Added symbol to pool: FDUSD/USDT
+2026-04-06 08:54:11 | INFO     | agents.scout                   | Added symbol to pool: NIGHT/USDT
+2026-04-06 08:54:11 | INFO     | agents.scout                   | Added symbol to pool: MMT/USDT
+2026-04-06 08:54:12 | INFO     | agents.scout                   | Added symbol to pool: ALGO/USDT
+2026-04-06 08:54:12 | INFO     | agents.scout                   | Added symbol to pool: SUI/USDT
+2026-04-06 08:54:13 | INFO     | agents.scout                   | Added symbol to pool: WLD/USDT
+2026-04-06 08:54:13 | INFO     | agents.scout                   | Added symbol to pool: ME/USDT
+2026-04-06 08:54:14 | INFO     | agents.scout                   | Added symbol to pool: BONK/USDT
+2026-04-06 08:54:14 | INFO     | agents.scout                   | Added symbol to pool: TRU/USDT
+2026-04-06 08:54:15 | INFO     | agents.scout                   | Added symbol to pool: ENA/USDT
+2026-04-06 08:54:15 | INFO     | agents.scout                   | Added symbol to pool: SOL/USDT
+2026-04-06 08:54:16 | INFO     | agents.scout                   | Added symbol to pool: USD1/USDT
+2026-04-06 08:54:16 | INFO     | agents.scout                   | Added symbol to pool: BCH/USDT
+2026-04-06 08:54:17 | INFO     | agents.scout                   | Added symbol to pool: XAUT/USDT
+2026-04-06 08:54:17 | INFO     | agents.scout                   | Added symbol to pool: BANANAS31/USDT
+2026-04-06 08:54:18 | INFO     | agents.scout                   | Added symbol to pool: ZEC/USDT
+2026-04-06 08:54:18 | INFO     | agents.scout                   | Added symbol to pool: RENDER/USDT
+2026-04-06 08:54:19 | INFO     | agents.scout                   | Added symbol to pool: FOGO/USDT
+2026-04-06 08:54:19 | INFO     | agents.scout                   | Added symbol to pool: BTC/USDT
+2026-04-06 08:54:20 | INFO     | agents.scout                   | Added symbol to pool: ADA/USDT
+2026-04-06 08:54:20 | INFO     | agents.scout                   | Added symbol to pool: XUSD/USDT
+2026-04-06 08:54:21 | INFO     | agents.scout                   | Added symbol to pool: DOT/USDT
+2026-04-06 08:54:21 | INFO     | agents.scout                   | Added symbol to pool: GIGGLE/USDT
+2026-04-06 08:54:22 | INFO     | agents.scout                   | Added symbol to pool: LTC/USDT
+2026-04-06 08:54:23 | INFO     | agents.scout                   | Added symbol to pool: XPL/USDT
+2026-04-06 08:54:23 | INFO     | agents.scout                   | Added symbol to pool: USDC/USDT
+2026-04-06 08:54:25 | INFO     | agents.scout                   | Added symbol to pool: D/USDT
+2026-04-06 08:54:25 | INFO     | agents.scout                   | Added symbol to pool: BNB/USDT
+2026-04-06 08:54:26 | INFO     | agents.scout                   | Added symbol to pool: XRP/USDT
+2026-04-06 08:54:26 | INFO     | agents.scout                   | Added symbol to pool: U/USDT
+2026-04-06 08:54:27 | INFO     | agents.scout                   | Added symbol to pool: PAXG/USDT
+2026-04-06 08:54:27 | INFO     | agents.scout                   | Added symbol to pool: AVAX/USDT
+2026-04-06 08:54:28 | INFO     | agents.scout                   | Added symbol to pool: LINK/USDT
+2026-04-06 08:54:29 | INFO     | agents.scout                   | Added symbol to pool: 币安人生/USDT
+2026-04-06 08:54:29 | INFO     | agents.scout                   | Added symbol to pool: ETH/USDT
+2026-04-06 08:54:30 | INFO     | agents.scout                   | Added symbol to pool: UNI/USDT
+2026-04-06 08:54:30 | INFO     | agents.scout                   | Added symbol to pool: XLM/USDT
+2026-04-06 08:54:31 | INFO     | agents.scout                   | Added symbol to pool: TRX/USDT
+2026-04-06 08:54:31 | INFO     | agents.scout                   | Added symbol to pool: EUR/USDT
+2026-04-06 08:54:32 | INFO     | agents.scout                   | Added symbol to pool: TAO/USDT
+2026-04-06 08:54:32 | INFO     | agents.scout                   | Added symbol to pool: STO/USDT
+2026-04-06 08:54:33 | INFO     | agents.scout                   | Added symbol to pool: AAVE/USDT
+2026-04-06 08:54:33 | INFO     | agents.scout                   | Added symbol to pool: ONDO/USDT
+2026-04-06 08:54:34 | INFO     | agents.scout                   | Added symbol to pool: SOLV/USDT
+2026-04-06 08:54:34 | INFO     | main                           | Initial pool: 50 symbols × 2 timeframes
+2026-04-06 08:54:34 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:54:34 | INFO     | main                           | All tasks started — bot is running.  Press Ctrl-C to stop.
+2026-04-06 08:54:34 | INFO     | main                           | 📊 Dashboard → http://localhost:8000
+2026-04-06 08:54:34 | INFO     | web.server                     | Dashboard available at http://localhost:8000
+2026-04-06 08:54:35 | INFO     | agents.scout                   | Symbol discovery: found 50 top USDT pairs
+2026-04-06 08:55:00 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: XRP/USDT [5m] price=1.3456 ≈ trendline=1.34132 (0.319%)
+2026-04-06 08:55:00 | INFO     | agents.mathematician           | 3rd Touch confirmed — low=1.3408 ≤ line=1.34116 < close=1.3456
+2026-04-06 08:55:00 | INFO     | agents.mathematician           | 🎯 3rd Touch SIGNAL: XRP/USDT [5m] conf_close=1.3456
+2026-04-06 08:55:00 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:00 | INFO     | agents.executioner             | 🎯 Signal detected: XRP/USDT [5m] — gating through AI...
+2026-04-06 08:55:00 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: ENA/USDT [5m] price=0.0809 ≈ trendline=0.080575 (0.403%)
+2026-04-06 08:55:00 | INFO     | agents.mathematician           | 3rd Touch confirmed — low=0.0805 ≤ line=0.080525 < close=0.0806
+2026-04-06 08:55:00 | INFO     | agents.mathematician           | 🎯 3rd Touch SIGNAL: ENA/USDT [5m] conf_close=0.0806
+2026-04-06 08:55:00 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:00 | INFO     | agents.executioner             | 🎯 Signal detected: ENA/USDT [5m] — gating through AI...
+2026-04-06 08:55:00 | ERROR    | agents.ai_manager              | AI Manager API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZnA83jRFynKi8uJiAfYs'} — defaulting to REJECT
+2026-04-06 08:55:00 | INFO     | agents.executioner             | 🤖 AI rejected: XRP/USDT (conf=0.00) — API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 
+2026-04-06 08:55:00 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:00 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: EUR/USDT [5m] price=1.1566 ≈ trendline=1.1527 (0.338%)
+2026-04-06 08:55:00 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:00 | ERROR    | agents.ai_manager              | AI Manager API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZnA84SajwL9D4kmc7wkS'} — defaulting to REJECT
+2026-04-06 08:55:00 | INFO     | agents.executioner             | 🤖 AI rejected: ENA/USDT (conf=0.00) — API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 
+2026-04-06 08:55:01 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:01 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: NIGHT/USDT [5m] price=0.04222 ≈ trendline=0.0421034 (0.277%)
+2026-04-06 08:55:01 | INFO     | agents.mathematician           | 3rd Touch confirmed — low=0.04209 ≤ line=0.0420964 < close=0.04213
+2026-04-06 08:55:01 | INFO     | agents.mathematician           | 🎯 3rd Touch SIGNAL: NIGHT/USDT [5m] conf_close=0.04213
+2026-04-06 08:55:01 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:01 | INFO     | agents.executioner             | 🎯 Signal detected: NIGHT/USDT [5m] — gating through AI...
+2026-04-06 08:55:01 | ERROR    | agents.ai_manager              | AI Manager API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZnA88Ufwh6T9gx4VLM7B'} — defaulting to REJECT
+2026-04-06 08:55:01 | INFO     | agents.executioner             | 🤖 AI rejected: NIGHT/USDT (conf=0.00) — API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 
+2026-04-06 08:55:01 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: LTC/USDT [5m] price=54.13 ≈ trendline=54.165 (0.065%)
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: ADA/USDT [5m] price=0.2554 ≈ trendline=0.255621 (0.087%)
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: XLM/USDT [5m] price=0.1614 ≈ trendline=0.16099 (0.255%)
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 3rd Touch confirmed — low=0.1606 ≤ line=0.160946 < close=0.1611
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 🎯 3rd Touch SIGNAL: XLM/USDT [5m] conf_close=0.1611
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | INFO     | agents.executioner             | 🎯 Signal detected: XLM/USDT [5m] — gating through AI...
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: BONK/USDT [5m] price=5.77e-06 ≈ trendline=5.76934e-06 (0.011%)
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 3rd Touch confirmed — low=5.76e-06 ≤ line=5.76672e-06 < close=5.77e-06
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 🎯 3rd Touch SIGNAL: BONK/USDT [5m] conf_close=5.77e-06
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | INFO     | agents.executioner             | 🎯 Signal detected: BONK/USDT [5m] — gating through AI...
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: FET/USDT [5m] price=0.2378 ≈ trendline=0.238859 (0.443%)
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | ERROR    | agents.ai_manager              | AI Manager API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZnA8ByX2sfgdpmMyfksw'} — defaulting to REJECT
+2026-04-06 08:55:02 | INFO     | agents.executioner             | 🤖 AI rejected: XLM/USDT (conf=0.00) — API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: DOGE/USDT [5m] price=0.09218 ≈ trendline=0.0920661 (0.124%)
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 3rd Touch confirmed — low=0.09188 ≤ line=0.0920587 < close=0.09218
+2026-04-06 08:55:02 | INFO     | agents.mathematician           | 🎯 3rd Touch SIGNAL: DOGE/USDT [5m] conf_close=0.09218
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:02 | INFO     | agents.executioner             | 🎯 Signal detected: DOGE/USDT [5m] — gating through AI...
+2026-04-06 08:55:02 | ERROR    | agents.ai_manager              | AI Manager API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZnA8CM6AgLHULHxrgszk'} — defaulting to REJECT
+2026-04-06 08:55:02 | INFO     | agents.executioner             | 🤖 AI rejected: BONK/USDT (conf=0.00) — API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 
+2026-04-06 08:55:02 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:03 | ERROR    | agents.ai_manager              | AI Manager API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZnA8D7ydSQzhaJJcELSX'} — defaulting to REJECT
+2026-04-06 08:55:03 | INFO     | agents.executioner             | 🤖 AI rejected: DOGE/USDT (conf=0.00) — API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 
+2026-04-06 08:55:03 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:03 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: DOT/USDT [5m] price=1.274 ≈ trendline=1.268 (0.473%)
+2026-04-06 08:55:03 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:03 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: XUSD/USDT [5m] price=0.9999 ≈ trendline=1.00056 (0.066%)
+2026-04-06 08:55:03 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: AVAX/USDT [5m] price=9.4 ≈ trendline=9.41281 (0.136%)
+2026-04-06 08:55:03 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:03 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:03 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: XPL/USDT [5m] price=0.1181 ≈ trendline=0.118033 (0.056%)
+2026-04-06 08:55:03 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:03 | INFO     | agents.mathematician           | 👁️  Watcher ARMED: SHIB/USDT [5m] price=6e-06 ≈ trendline=5.98379e-06 (0.271%)
+2026-04-06 08:55:03 | INFO     | agents.mathematician           | 3rd Touch confirmed — low=5.98e-06 ≤ line=5.98103e-06 < close=6e-06
+2026-04-06 08:55:03 | INFO     | agents.mathematician           | 🎯 3rd Touch SIGNAL: SHIB/USDT [5m] conf_close=6e-06
+2026-04-06 08:55:03 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:55:03 | INFO     | agents.executioner             | 🎯 Signal detected: SHIB/USDT [5m] — gating through AI...
+2026-04-06 08:55:03 | ERROR    | agents.ai_manager              | AI Manager API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CZnA8GWNXVLbn7EDoTZuC'} — defaulting to REJECT
+2026-04-06 08:55:03 | INFO     | agents.executioner             | 🤖 AI rejected: SHIB/USDT (conf=0.00) — API error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 
+2026-04-06 08:55:03 | WARNING  | utils.notifications            | Telegram send failed: Client error '401 Unauthorized' for url 'https://api.telegram.org/bot0000000000:placeholder_telegram_token/sendMessage'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+2026-04-06 08:56:04 | INFO     | web.server                     | Dashboard WebSocket connected: Address(host='82.15.150.176', port=0)
+2026-04-06 10:53:37 | INFO     | root                           | Logging initialised  →  file=bot.log  level=INFO
+2026-04-06 10:53:37 | INFO     | main                           | ============================================================
+2026-04-06 10:53:37 | INFO     | main                           |   3rd Touch Trendline Bot — starting up
+2026-04-06 10:53:37 | INFO     | main                           |   Exchange  : Binance Spot
+2026-04-06 10:53:37 | INFO     | main                           |   AI Model  : claude-sonnet-4-6
+2026-04-06 10:53:37 | INFO     | main                           |   Top pairs : 50
+2026-04-06 10:53:37 | INFO     | main                           |   Timeframes: ['5m', '15m']
+2026-04-06 10:53:37 | INFO     | main                           | ============================================================
+2026-04-06 10:53:37 | INFO     | agents.scout                   | ScoutAgent started — exchange: binance (spot)
+2026-04-06 10:53:37 | INFO     | main                           | ScoutAgent initialised with shared exchange connection
+2026-04-06 10:53:39 | INFO     | main                           | BTC 1h buffer seeded: 300 candles
+2026-04-06 10:53:41 | INFO     | agents.scout                   | Symbol discovery: found 50 top USDT pairs
+2026-04-06 10:53:42 | INFO     | agents.scout                   | Added symbol to pool: SOL/USDT
+2026-04-06 10:53:42 | INFO     | agents.scout                   | Added symbol to pool: SUI/USDT
+2026-04-06 10:53:43 | INFO     | agents.scout                   | Added symbol to pool: FET/USDT
+2026-04-06 10:53:43 | INFO     | agents.scout                   | Added symbol to pool: BTC/USDT
+2026-04-06 10:53:44 | INFO     | agents.scout                   | Added symbol to pool: ADA/USDT
+2026-04-06 10:53:44 | INFO     | agents.scout                   | Added symbol to pool: MMT/USDT
+2026-04-06 10:53:45 | INFO     | agents.scout                   | Added symbol to pool: PAXG/USDT
+2026-04-06 10:53:46 | INFO     | agents.scout                   | Added symbol to pool: WLD/USDT
+2026-04-06 10:53:46 | INFO     | agents.scout                   | Added symbol to pool: NEAR/USDT
+2026-04-06 10:53:47 | INFO     | agents.scout                   | Added symbol to pool: XAUT/USDT
+2026-04-06 10:53:47 | INFO     | agents.scout                   | Added symbol to pool: BNB/USDT
+2026-04-06 10:53:48 | INFO     | agents.scout                   | Added symbol to pool: EUR/USDT
+2026-04-06 10:53:48 | INFO     | agents.scout                   | Added symbol to pool: TAO/USDT
+2026-04-06 10:53:49 | INFO     | agents.scout                   | Added symbol to pool: USD1/USDT
+2026-04-06 10:53:49 | INFO     | agents.scout                   | Added symbol to pool: DOT/USDT
+2026-04-06 10:53:50 | INFO     | agents.scout                   | Added symbol to pool: ZEC/USDT
+2026-04-06 10:53:50 | INFO     | agents.scout                   | Added symbol to pool: TRU/USDT
+2026-04-06 10:53:51 | INFO     | agents.scout                   | Added symbol to pool: LINK/USDT
+2026-04-06 10:53:51 | INFO     | agents.scout                   | Added symbol to pool: TRX/USDT
+2026-04-06 10:53:52 | INFO     | agents.scout                   | Added symbol to pool: RLUSD/USDT
+2026-04-06 10:53:52 | INFO     | agents.scout                   | Added symbol to pool: BANANAS31/USDT
+2026-04-06 10:53:53 | INFO     | agents.scout                   | Added symbol to pool: ONDO/USDT
+2026-04-06 10:53:53 | INFO     | agents.scout                   | Added symbol to pool: XPL/USDT
+2026-04-06 10:53:54 | INFO     | agents.scout                   | Added symbol to pool: GIGGLE/USDT
+2026-04-06 10:53:54 | INFO     | agents.scout                   | Added symbol to pool: FDUSD/USDT
+2026-04-06 10:53:55 | INFO     | agents.scout                   | Added symbol to pool: LTC/USDT
+2026-04-06 10:53:55 | INFO     | agents.scout                   | Added symbol to pool: SHIB/USDT
+2026-04-06 10:53:56 | INFO     | agents.scout                   | Added symbol to pool: USDC/USDT
+2026-04-06 10:53:57 | INFO     | agents.scout                   | Added symbol to pool: ENA/USDT
+2026-04-06 10:53:57 | INFO     | agents.scout                   | Added symbol to pool: DOGE/USDT
+2026-04-06 10:53:58 | INFO     | agents.scout                   | Added symbol to pool: 币安人生/USDT
+2026-04-06 10:53:58 | INFO     | agents.scout                   | Added symbol to pool: AAVE/USDT
+2026-04-06 10:53:59 | INFO     | agents.scout                   | Added symbol to pool: RENDER/USDT
+2026-04-06 10:53:59 | INFO     | agents.scout                   | Added symbol to pool: BONK/USDT
+2026-04-06 10:54:00 | INFO     | agents.scout                   | Added symbol to pool: AVAX/USDT
+2026-04-06 10:54:00 | INFO     | agents.scout                   | Added symbol to pool: BCH/USDT
+2026-04-06 10:54:01 | INFO     | agents.scout                   | Added symbol to pool: HBAR/USDT
+2026-04-06 10:54:01 | INFO     | agents.scout                   | Added symbol to pool: KITE/USDT
+2026-04-06 10:54:02 | INFO     | agents.scout                   | Added symbol to pool: ALGO/USDT
+2026-04-06 10:54:02 | INFO     | agents.scout                   | Added symbol to pool: XRP/USDT
+2026-04-06 10:54:03 | INFO     | agents.scout                   | Added symbol to pool: D/USDT
+2026-04-06 10:54:04 | INFO     | agents.scout                   | Added symbol to pool: ETH/USDT
+2026-04-06 10:54:04 | INFO     | agents.scout                   | Added symbol to pool: XLM/USDT
+2026-04-06 10:54:05 | INFO     | agents.scout                   | Added symbol to pool: ME/USDT
+2026-04-06 10:54:05 | INFO     | agents.scout                   | Added symbol to pool: STO/USDT
+2026-04-06 10:54:06 | INFO     | agents.scout                   | Added symbol to pool: UNI/USDT
+2026-04-06 10:54:06 | INFO     | agents.scout                   | Added symbol to pool: XUSD/USDT
+2026-04-06 10:54:07 | INFO     | agents.scout                   | Added symbol to pool: NIGHT/USDT
+2026-04-06 10:54:07 | INFO     | agents.scout                   | Added symbol to pool: PEPE/USDT
+2026-04-06 10:54:08 | INFO     | agents.scout                   | Added symbol to pool: U/USDT
+2026-04-06 10:54:08 | INFO     | main                           | Initial pool: 50 symbols × 2 timeframes
+2026-04-06 10:54:12 | INFO     | main                           | All tasks started — bot is running.  Press Ctrl-C to stop.
+2026-04-06 10:54:12 | INFO     | main                           | 📊 Dashboard → http://localhost:8000
+2026-04-06 10:54:12 | INFO     | web.server                     | Dashboard available at http://localhost:8000
+2026-04-06 10:54:12 | INFO     | agents.scout                   | Symbol discovery: found 50 top USDT pairs

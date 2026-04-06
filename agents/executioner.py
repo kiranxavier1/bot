@@ -1,0 +1,631 @@
+"""
+agents/executioner.py  (v2)
+─────────────────────────────────────────────────────────────────────────────
+The Disciplined Executioner — trade entry and position monitoring.
+
+Fixes applied here
+──────────────────
+FIX #1  — Volume check now threaded through mathematician (handled there)
+FIX #2  — 200-EMA higher-timeframe filter: coin must be above EMA-200 on 1h
+FIX #3  — DI+ > DI- directional check: upward momentum must be confirmed
+FIX #4  — ATR-based SL passed to Warden (computed via calc_atr)
+FIX #6  — Circuit breaker checked before every new trade attempt
+FIX #9  — Limit orders instead of market orders (placed at current ask price)
+           Order tracked for fill; cancelled and skipped if not filled in time.
+USER    — swing_tp_target from Mathematician used as primary TP; fixed-RR
+           fallback when no valid swing high is available.
+
+Flow (per candle close)
+───────────────────────
+1. Circuit-breaker guard (FIX #6)
+2. Position monitoring if already in a trade (with candles for structure BE)
+3. Cooldown guard
+4. Retrieve candles + DataFrames
+5. Mathematician analysis (now receives df — FIX #1 volume inside math)
+6. Proximity watcher alert
+7. No signal → return
+8. HTF EMA-200 filter (FIX #2) — reject if coin below EMA-200 on 1h
+9. ADX directional filter (FIX #3) — reject if DI- > DI+
+10. Compute ATR-based SL (FIX #4)
+11. Determine TP: swing high target (USER) or fixed-RR fallback
+12. Build rich AI proposal
+13. Claude gating
+14. Execute limit buy (FIX #9)
+─────────────────────────────────────────────────────────────────────────────
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from typing import Any, Dict, List, Optional
+
+import ccxt.pro as ccxtpro  # type: ignore
+import pandas as pd
+
+import config
+from agents.mathematician import MathematicianAgent
+from agents.ai_manager    import AIManager, build_proposal
+from agents.warden        import (
+    WardenAgent,
+    calculate_stop_loss_atr,
+    calculate_stop_loss,
+    calculate_take_profit,
+    calculate_position_size,
+)
+from data.candle_buffer   import BufferRegistry
+from utils.indicators     import (
+    calc_atr,
+    market_regime,
+    price_above_ema200,
+)
+from utils.notifications  import Notifier
+from web.state            import bot_state
+
+log = logging.getLogger(__name__)
+
+# How long (seconds) to wait for a limit order to fill before cancelling
+_ENTRY_ORDER_TIMEOUT = 90
+
+
+class ExecutionerAgent:
+    """
+    Orchestrates the trade lifecycle for each (symbol, timeframe) pair.
+
+    Parameters
+    ----------
+    exchange      : shared ccxt.pro exchange instance (REST + WS, authenticated)
+    registry      : shared BufferRegistry
+    mathematician : shared MathematicianAgent
+    ai_manager    : shared AIManager
+    warden        : shared WardenAgent
+    notifier      : shared Notifier
+    """
+
+    def __init__(
+        self,
+        exchange:      ccxtpro.Exchange,
+        registry:      BufferRegistry,
+        mathematician: MathematicianAgent,
+        ai_manager:    AIManager,
+        warden:        WardenAgent,
+        notifier:      Notifier,
+    ) -> None:
+        self._exchange = exchange
+        self._registry = registry
+        self._math     = mathematician
+        self._ai       = ai_manager
+        self._warden   = warden
+        self._notifier = notifier
+
+    # ── Main entry point ──────────────────────────────────────────────────────
+    async def on_candle_close(
+        self,
+        symbol:        str,
+        timeframe:     str,
+        closed_candle: dict,
+    ) -> None:
+        """
+        Dispatched per (symbol, timeframe) on each confirmed candle close.
+        Only processes SIGNAL_TIMEFRAME candles for new entries; all timeframes
+        are used for position monitoring.
+        """
+        # ── FIX #6 — Global circuit breaker guard ────────────────────────────
+        if self._warden.is_circuit_breaker_hit():
+            if self._warden.has_position(symbol):
+                # Still monitor existing positions even when CB is active
+                candles = await self._get_candles(symbol, timeframe)
+                if candles:
+                    await self._monitor_position(symbol, closed_candle, candles)
+            return
+
+        # ── Existing position monitoring ──────────────────────────────────────
+        if self._warden.has_position(symbol):
+            candles = await self._get_candles(symbol, timeframe)
+            if candles:
+                await self._monitor_position(symbol, closed_candle, candles)
+            return
+
+        # ── Only look for new entries on the signal timeframe ─────────────────
+        if timeframe != config.SIGNAL_TIMEFRAME:
+            return
+
+        # ── Cooldown guard ────────────────────────────────────────────────────
+        if self._warden.is_on_cooldown(symbol):
+            log.debug("Skipping %s — on cooldown", symbol)
+            return
+
+        # ── Retrieve candles + DataFrames ─────────────────────────────────────
+        candles = await self._get_candles(symbol, timeframe)
+        if not candles or len(candles) < 2 * config.PIVOT_N + 5:
+            return
+
+        symbol_df = await self._get_df(symbol, timeframe)
+        if symbol_df is None:
+            return
+
+        # ── Mathematician analysis (FIX #1: df passed for volume check) ───────
+        math_result = await self._math.process(
+            symbol, timeframe, candles, symbol_df
+        )
+
+        # Proximity watcher alert
+        if math_result.get("armed"):
+            live_price = candles[-1]["close"]
+            tl_price   = math_result.get("trendline_price", 0.0)
+            prox_pct   = math_result.get("proximity_pct", 0.0)
+            await self._notifier.send(
+                Notifier.watcher_alert_msg(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    current_price=live_price,
+                    trendline_price=tl_price,
+                    proximity_pct=prox_pct,
+                )
+            )
+            asyncio.create_task(bot_state.push_watcher_alert(
+                symbol=symbol,
+                timeframe=timeframe,
+                price=live_price,
+                trendline_price=tl_price,
+                proximity_pct=prox_pct,
+            ))
+
+        if not math_result.get("signal"):
+            return
+
+        conf_candle    = math_result["confirmation_candle"]
+        trendline      = math_result["trendline"]
+        touch_count    = math_result.get("touch_count", 0)
+        vol_ratio      = math_result.get("vol_ratio", 1.0)
+        swing_tp_math  = math_result.get("swing_tp_target")   # from mathematician
+
+        log.info(
+            "🎯 Signal detected: %s [%s] touches=%d vol_ratio=%.2f — "
+            "running pre-trade filters...",
+            symbol, timeframe, touch_count, vol_ratio,
+        )
+
+        # ── FIX #2 — Higher-timeframe EMA-200 filter ─────────────────────────
+        htf_df = await self._get_htf_df(symbol)
+        htf_above_ema = price_above_ema200(htf_df) if htf_df is not None else True
+
+        if not htf_above_ema:
+            log.info(
+                "❌ HTF filter rejected %s — price is BELOW 200-EMA on %s",
+                symbol, config.HTF_FILTER_TF,
+            )
+            return
+
+        # ── FIX #3 — ADX directional filter: DI+ must exceed DI- ─────────────
+        regime, adx, di_plus, di_minus = market_regime(symbol_df)
+
+        if config.ADX_REQUIRE_DIRECTION and di_minus >= di_plus:
+            log.info(
+                "❌ ADX direction rejected %s — DI-=%.1f ≥ DI+=%.1f (no upward pressure)",
+                symbol, di_minus, di_plus,
+            )
+            return
+
+        if adx < config.ADX_TREND_THRESHOLD:
+            log.info(
+                "❌ ADX filter rejected %s — ADX=%.1f < threshold %d (ranging market)",
+                symbol, adx, config.ADX_TREND_THRESHOLD,
+            )
+            return
+
+        log.info(
+            "✅ Pre-trade filters passed: %s | HTF EMA-200=✅ | ADX=%.1f DI+=%.1f DI-=%.1f",
+            symbol, adx, di_plus, di_minus,
+        )
+
+        # ── Preliminary entry / SL / TP for the AI proposal ──────────────────
+        entry_est = candles[-1]["close"]
+
+        # FIX #4 — ATR-based SL
+        atr = calc_atr(symbol_df)
+        if atr > 0:
+            raw_sl = calculate_stop_loss_atr(entry_est, atr)
+        else:
+            raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
+
+        # USER INSIGHT + FIX #11 — swing high TP, fallback to fixed RR
+        if swing_tp_math and swing_tp_math > entry_est:
+            raw_tp = swing_tp_math
+            tp_source = "swing_high"
+        else:
+            raw_tp = calculate_take_profit(entry_est, raw_sl)
+            tp_source = "fixed_rr"
+
+        log.info(
+            "📐 Preliminary levels: entry≈%.6g SL=%.6g TP=%.6g (source=%s) ATR=%.6g",
+            entry_est, raw_sl, raw_tp, tp_source, atr,
+        )
+
+        # ── Fetch context DataFrames for AI ───────────────────────────────────
+        btc_df = await self._get_df(config.BTC_SYMBOL, config.BTC_TIMEFRAME)
+
+        # ── Build AI proposal (v2 — richer context) ───────────────────────────
+        proposal = build_proposal(
+            symbol=symbol,
+            timeframe=timeframe,
+            entry_price=entry_est,
+            stop_loss=raw_sl,
+            take_profit=raw_tp,
+            confirmation_candle=conf_candle,
+            trendline_slope=trendline.slope if trendline else 0.0,
+            touch_proximity_pct=math_result.get("proximity_pct") or 0.0,
+            btc_df=btc_df,
+            symbol_df=symbol_df,
+            # ── v2 extra context ──
+            touch_count=touch_count,
+            vol_ratio=vol_ratio,
+            swing_tp_target=swing_tp_math,
+            tp_source=tp_source,
+            atr=atr,
+            adx=adx,
+            di_plus=di_plus,
+            di_minus=di_minus,
+            htf_above_ema=htf_above_ema,
+        )
+
+        # ── Claude gating ─────────────────────────────────────────────────────
+        decision = await self._ai.evaluate(proposal)
+
+        if not self._ai.should_proceed(decision):
+            log.info(
+                "🤖 AI rejected: %s (conf=%.2f) — %s",
+                symbol,
+                decision.get("confidence", 0.0),
+                decision.get("reasoning", "")[:100],
+            )
+            await self._notifier.send(
+                Notifier.ai_rejected_msg(
+                    symbol=symbol,
+                    reason=decision.get("reasoning", "No reason given"),
+                    confidence=decision.get("confidence", 0.0),
+                )
+            )
+            return
+
+        log.info(
+            "✅ AI approved: %s conf=%.2f — executing limit buy",
+            symbol, decision["confidence"],
+        )
+
+        # ── FIX #9 — Execute limit buy ────────────────────────────────────────
+        await self._execute_limit_buy(
+            symbol=symbol,
+            conf_candle=conf_candle,
+            atr=atr,
+            swing_tp=swing_tp_math,
+        )
+
+    # ── FIX #9 — Limit buy with fill tracking ────────────────────────────────
+    async def _execute_limit_buy(
+        self,
+        symbol:    str,
+        conf_candle: dict,
+        atr:       float,
+        swing_tp:  Optional[float] = None,
+    ) -> None:
+        """
+        Place a limit buy at the current ask price (fills like a market order
+        but with price protection against adverse fills).
+
+        After placing, we poll for fill every ~5 s for up to
+        _ENTRY_ORDER_TIMEOUT seconds.  If not filled in time, cancel and skip.
+        """
+        try:
+            # ── Fetch balance (FIX #6 seeds daily tracker) ───────────────────
+            balance   = await self._exchange.fetch_balance()
+            usdt_free = float(balance.get("USDT", {}).get("free", 0.0))
+            self._warden.daily_loss.set_start_balance(usdt_free)
+
+            if usdt_free < 10:
+                log.warning(
+                    "Insufficient USDT balance (%.2f) — skipping buy for %s",
+                    usdt_free, symbol,
+                )
+                return
+
+            # ── Get current ask for limit price ──────────────────────────────
+            ticker      = await self._exchange.fetch_ticker(symbol)
+            ask_price   = float(ticker.get("ask") or ticker.get("last") or 0.0)
+            if ask_price <= 0:
+                log.error("Invalid ask price for %s — aborting buy", symbol)
+                return
+
+            # ── FIX #4 — ATR-based SL / TP ───────────────────────────────────
+            if atr > 0:
+                stop_loss = calculate_stop_loss_atr(ask_price, atr)
+            else:
+                stop_loss = calculate_stop_loss(ask_price, conf_candle["low"])
+
+            # USER INSIGHT — swing high TP or fixed-RR fallback
+            if swing_tp and swing_tp > ask_price:
+                take_profit = swing_tp
+            else:
+                take_profit = calculate_take_profit(ask_price, stop_loss)
+
+            quantity = calculate_position_size(usdt_free, ask_price, stop_loss)
+            if quantity <= 0:
+                log.warning("Zero quantity for %s — skipping", symbol)
+                return
+
+            # Round to exchange precision
+            quantity = float(
+                self._exchange.amount_to_precision(symbol, quantity)
+            )
+            limit_price = float(
+                self._exchange.price_to_precision(symbol, ask_price)
+            )
+
+            log.info(
+                "🛒 Placing Limit Buy: %s qty=%.6g @ %.6g | SL=%.6g | TP=%.6g",
+                symbol, quantity, limit_price, stop_loss, take_profit,
+            )
+
+            # ── Place order ───────────────────────────────────────────────────
+            order = await self._exchange.create_limit_buy_order(
+                symbol, quantity, limit_price
+            )
+            order_id = order["id"]
+            log.info("Order placed: %s id=%s — waiting for fill...", symbol, order_id)
+
+            # ── Poll for fill (FIX #9) ────────────────────────────────────────
+            deadline = time.time() + _ENTRY_ORDER_TIMEOUT
+            while time.time() < deadline:
+                await asyncio.sleep(5)
+                try:
+                    order = await self._exchange.fetch_order(order_id, symbol)
+                except Exception as fetch_exc:
+                    log.warning(
+                        "fetch_order failed for %s id=%s: %s",
+                        symbol, order_id, fetch_exc,
+                    )
+                    continue
+
+                status = order.get("status", "open")
+                if status == "closed":
+                    break
+                if status == "canceled":
+                    log.warning("Order %s was externally cancelled — aborting", order_id)
+                    return
+
+            if order.get("status") != "closed":
+                # Timed out — cancel the open order and skip this signal
+                try:
+                    await self._exchange.cancel_order(order_id, symbol)
+                    log.warning(
+                        "Limit order timed out (%ds) and was cancelled: %s id=%s",
+                        _ENTRY_ORDER_TIMEOUT, symbol, order_id,
+                    )
+                except Exception as cancel_exc:
+                    log.error(
+                        "Failed to cancel order %s for %s: %s",
+                        order_id, symbol, cancel_exc,
+                    )
+                await self._notifier.send(
+                    f"⏱️ <b>Limit order expired</b> for <code>{symbol}</code> — "
+                    f"signal skipped (no fill within {_ENTRY_ORDER_TIMEOUT}s)."
+                )
+                return
+
+            # ── Order filled ──────────────────────────────────────────────────
+            filled_price = float(order.get("average") or order.get("price") or limit_price)
+            filled_qty   = float(order.get("filled")  or quantity)
+
+            log.info(
+                "✅ Fill confirmed: %s | price=%.6g | qty=%.6g | orderId=%s",
+                symbol, filled_price, filled_qty, order_id,
+            )
+
+            # Recalculate SL / TP on actual fill price
+            if atr > 0:
+                stop_loss = calculate_stop_loss_atr(filled_price, atr)
+            else:
+                stop_loss = calculate_stop_loss(filled_price, conf_candle["low"])
+
+            if swing_tp and swing_tp > filled_price:
+                take_profit = swing_tp
+            else:
+                take_profit = calculate_take_profit(filled_price, stop_loss)
+
+            # ── Register with Warden ──────────────────────────────────────────
+            self._warden.open_position(
+                symbol=symbol,
+                entry_price=filled_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                quantity=filled_qty,
+            )
+
+            # ── Telegram notification ─────────────────────────────────────────
+            await self._notifier.send(
+                Notifier.trade_opened_msg(
+                    symbol=symbol,
+                    side="buy",
+                    entry=filled_price,
+                    sl=stop_loss,
+                    tp=take_profit,
+                    size=filled_qty,
+                )
+            )
+
+        except Exception as exc:
+            log.error("Limit buy failed for %s: %s", symbol, exc, exc_info=True)
+            await self._notifier.send(
+                Notifier.error_msg(f"Limit buy {symbol}", exc)
+            )
+
+    # ── Monitor existing position ─────────────────────────────────────────────
+    async def _monitor_position(
+        self,
+        symbol:  str,
+        candle:  dict,
+        candles: List[Dict],   # FIX #8: passed to Warden for structure BE
+    ) -> None:
+        """Check SL / TP / structure-BE on each candle close for open position."""
+        result = await self._warden.check_position(
+            symbol=symbol,
+            latest_close=candle["close"],
+            latest_high=candle["high"],
+            latest_low=candle["low"],
+            candles=candles,    # FIX #8
+        )
+
+        if result in ("SL", "TP"):
+            pos = self._warden.get_position(symbol)   # already removed if closed
+            exit_price  = candle["low"]  if result == "SL" else candle["high"]
+            # pos is None here because Warden already popped it; use candle prices
+            entry_price = 0.0            # we log approximate values
+
+            await self._execute_sell(symbol, exit_price)
+
+            await self._notifier.send(
+                Notifier.trade_closed_msg(
+                    symbol=symbol,
+                    reason=result,
+                    entry=entry_price,
+                    exit_price=exit_price,
+                    pnl_pct=0.0,    # Warden already logged exact P&L
+                )
+            )
+
+        elif result == "BE":
+            pos = self._warden.get_position(symbol)
+            if pos:
+                await self._notifier.send(
+                    f"🔁 <b>SL trailed</b> for <code>{symbol}</code> — "
+                    f"new SL: <code>{pos.stop_loss:.6g}</code> "
+                    f"{'(Break-Even ✅)' if pos.be_activated else '(structure trail)'}"
+                )
+
+    # ── Execute a limit sell ──────────────────────────────────────────────────
+    async def _execute_sell(self, symbol: str, exit_price: float) -> None:
+        """
+        Place a limit sell at the current bid price.
+        Falls back to market sell if limit not filled within timeout.
+        """
+        pos      = self._warden.get_position(symbol)
+        quantity = pos.quantity if pos else 0.0
+
+        if quantity <= 0:
+            log.warning("No quantity to sell for %s", symbol)
+            return
+
+        try:
+            ticker    = await self._exchange.fetch_ticker(symbol)
+            bid_price = float(ticker.get("bid") or ticker.get("last") or exit_price)
+            qty_str   = float(self._exchange.amount_to_precision(symbol, quantity))
+            bid_str   = float(self._exchange.price_to_precision(symbol, bid_price))
+
+            order = await self._exchange.create_limit_sell_order(
+                symbol, qty_str, bid_str
+            )
+            order_id = order["id"]
+            log.info(
+                "📤 Limit Sell placed: %s qty=%.6g @ %.6g | id=%s",
+                symbol, qty_str, bid_str, order_id,
+            )
+
+            # Brief wait for fill (sells at bid usually fill fast)
+            deadline = time.time() + _ENTRY_ORDER_TIMEOUT
+            while time.time() < deadline:
+                await asyncio.sleep(5)
+                try:
+                    order = await self._exchange.fetch_order(order_id, symbol)
+                except Exception:
+                    continue
+                if order.get("status") == "closed":
+                    break
+
+            if order.get("status") != "closed":
+                # Fall back to market sell
+                log.warning(
+                    "Limit sell timed out for %s — falling back to market sell",
+                    symbol,
+                )
+                await self._exchange.cancel_order(order_id, symbol)
+                order = await self._exchange.create_market_sell_order(
+                    symbol, qty_str
+                )
+
+            filled = float(order.get("average") or order.get("price") or bid_price)
+            log.info(
+                "💰 Sell confirmed: %s qty=%.6g @ %.6g | id=%s",
+                symbol, qty_str, filled, order.get("id"),
+            )
+
+        except Exception as exc:
+            log.error(
+                "Sell failed for %s: %s — position may still be open!",
+                symbol, exc, exc_info=True,
+            )
+            await self._notifier.send(
+                Notifier.error_msg(f"Sell {symbol}", exc)
+            )
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    async def _get_candles(
+        self, symbol: str, timeframe: str
+    ) -> Optional[List[Dict]]:
+        buf = self._registry.get(symbol, timeframe)
+        if buf is None:
+            return None
+        try:
+            return await buf.snapshot()
+        except Exception:
+            return None
+
+    async def _get_df(
+        self, symbol: str, timeframe: str
+    ) -> Optional[pd.DataFrame]:
+        buf = self._registry.get(symbol, timeframe)
+        if buf is None:
+            return None
+        try:
+            return await buf.to_dataframe()
+        except Exception:
+            return None
+
+    async def _get_htf_df(self, symbol: str) -> Optional[pd.DataFrame]:
+        """
+        FIX #2 — Get the 1h DataFrame for the higher-timeframe EMA filter.
+
+        Checks the buffer registry first (populated if 1h is in TIMEFRAMES).
+        Falls back to a REST fetch so the filter always runs regardless of
+        whether the scout is streaming 1h data.
+        """
+        # Check registry (e.g. if someone adds "1h" to TIMEFRAMES in future)
+        buf = self._registry.get(symbol, config.HTF_FILTER_TF)
+        if buf is not None:
+            try:
+                df = await buf.to_dataframe()
+                if df is not None and len(df) >= 50:
+                    return df
+            except Exception:
+                pass
+
+        # REST fallback — OHLCV is a public endpoint, no auth needed
+        try:
+            raw = await self._exchange.fetch_ohlcv(
+                symbol,
+                config.HTF_FILTER_TF,
+                limit=config.HTF_CANDLE_LIMIT,
+            )
+            if not raw:
+                return None
+            df = pd.DataFrame(
+                raw,
+                columns=["timestamp", "open", "high", "low", "close", "volume"],
+            )
+            return df
+        except Exception as exc:
+            log.warning(
+                "HTF OHLCV fetch failed for %s %s: %s — HTF filter will be skipped",
+                symbol, config.HTF_FILTER_TF, exc,
+            )
+            return None

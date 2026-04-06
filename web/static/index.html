@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trading Bot Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #f5f7fa;
+      --surface:  #ffffff;
+      --border:   #e8ecf0;
+      --text:     #1a1f2e;
+      --muted:    #6b7280;
+      --accent:   #3b72f6;
+      --green:    #16a34a;
+      --green-bg: #dcfce7;
+      --red:      #dc2626;
+      --red-bg:   #fee2e2;
+      --amber:    #d97706;
+      --amber-bg: #fef3c7;
+      --blue-bg:  #dbeafe;
+      --radius:   10px;
+      --shadow:   0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md:0 4px 12px rgba(0,0,0,.10);
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Layout */
+    .navbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 58px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); }
+    .navbar-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: var(--text); }
+    .navbar-brand svg { color: var(--accent); }
+    .navbar-right { display: flex; align-items: center; gap: 16px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px var(--green-bg); animation: pulse 2s infinite; }
+    .status-dot.offline { background: var(--red); box-shadow: 0 0 0 2px var(--red-bg); animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    .status-label { font-size: 12px; font-weight: 500; color: var(--muted); }
+    .uptime { font-size: 12px; font-weight: 500; color: var(--muted); }
+    .ws-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+    .ws-badge.live { background: var(--green-bg); color: var(--green); }
+    .ws-badge.conn { background: var(--amber-bg); color: var(--amber); }
+    .ws-badge.disc { background: var(--red-bg); color: var(--red); }
+
+    .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* Stat cards */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+    .stat-label { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .stat-value { font-size: 26px; font-weight: 700; line-height: 1; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red   { color: var(--red); }
+    .stat-value.blue  { color: var(--accent); }
+    .stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* Panels */
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .panel-full { grid-column: 1 / -1; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .panel-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .panel-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .panel-count { font-size: 11px; font-weight: 600; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; color: var(--muted); }
+    .panel-body { overflow-y: auto; max-height: 420px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+    td { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f9fafb; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+    .badge.green  { background: var(--green-bg); color: var(--green); }
+    .badge.red    { background: var(--red-bg);   color: var(--red);   }
+    .badge.amber  { background: var(--amber-bg); color: var(--amber); }
+    .badge.blue   { background: var(--blue-bg);  color: var(--accent);}
+    .badge.gray   { background: #f3f4f6; color: var(--muted); }
+
+    /* P&L colours */
+    .pnl-pos { color: var(--green); font-weight: 600; }
+    .pnl-neg { color: var(--red);   font-weight: 600; }
+
+    /* AI log entry */
+    .ai-entry { padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .ai-entry:last-child { border-bottom: none; }
+    .ai-entry:hover { background: #f9fafb; }
+    .ai-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .ai-symbol { font-weight: 700; font-size: 13px; }
+    .ai-tf { font-size: 11px; color: var(--muted); }
+    .ai-ts { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .ai-reasoning { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
+    .ai-risks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .risk-tag { font-size: 11px; background: #fef3c7; color: #92400e; padding: 2px 7px; border-radius: 4px; }
+    .conf-bar { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .conf-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .conf-fill  { height: 100%; border-radius: 2px; transition: width .3s; }
+
+    /* Empty state */
+    .empty { padding: 48px 20px; text-align: center; color: var(--muted); }
+    .empty-icon { font-size: 32px; margin-bottom: 10px; }
+    .empty-msg { font-size: 13px; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .panels { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .main { padding: 12px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function fmt(n, d = 4) {
+  if (n == null) return '—';
+  const v = Number(n);
+  if (isNaN(v)) return '—';
+  if (v === 0) return '0';
+  if (Math.abs(v) >= 1000) return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return v.toPrecision(d).replace(/\.?0+$/, '');
+}
+
+function fmtPct(n) {
+  if (n == null) return '—';
+  const v = Number(n);
+  return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch { return iso; }
+}
+
+function fmtUptime(seconds) {
+  if (!seconds) return '0s';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function PnlCell({ value }) {
+  if (value == null) return <span className="mono">—</span>;
+  const v = Number(value);
+  const cls = v >= 0 ? 'pnl-pos' : 'pnl-neg';
+  return <span className={`mono ${cls}`}>{fmtPct(v)}</span>;
+}
+
+function Badge({ type, children }) {
+  return <span className={`badge ${type}`}>{children}</span>;
+}
+
+// ── Stat Card ──────────────────────────────────────────────────────────────
+function StatCard({ label, value, valueClass, sub }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className={`stat-value ${valueClass || ''}`}>{value}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+// ── Open Positions Panel ──────────────────────────────────────────────────
+function PositionsPanel({ positions }) {
+  if (!positions || positions.length === 0) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <span className="panel-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Open Positions
+          </span>
+          <span className="panel-count">0</span>
+        </div>
+        <div className="empty"><div className="empty-icon">📭</div><div className="empty-msg">No open positions</div></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span className="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Open Positions
+        </span>
+        <span className="panel-count">{positions.length}</span>
+      </div>
+      <div className="panel-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Entry</th>
+              <th>Current</th>
+              <th>SL</th>
+              <th>TP</th>
+              <th>P&amp;L</th>
+              <th>Status</th>
+              <th>Opened</th>
+            </tr>
+          </thead>
+          <tbody>
+            {positions.map(pos => (
+              <tr key={pos.symbol}>
+                <td><strong className="mono">{pos.symbol.replace('/USDT','')}</strong><span style={{color:'var(--muted)',fontSize:'11px'}}>/USDT</span></td>
+                <td className="mono">{fmt(pos.entry)}</td>
+                <td className="mono">{fmt(pos.current_price)}</td>
+                <td className="mono" style={{color:'var(--red)'}}>{fmt(pos.stop_loss)}</td>
+                <td className="mono" style={{color:'var(--green)'}}>{fmt(pos.take_profit)}</td>
+                <td><PnlCell value={pos.pnl_pct} /></td>
+                <td>{pos.be_activated ? <Badge type="amber">BE Active</Badge> : <Badge type="blue">Live</Badge>}</td>
+                <td style={{color:'var(--muted)'}}>{fmtTime(pos.opened_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Trade History Panel ───────────────────────────────────────────────────
+function TradeHistoryPanel({ trades }) {
+  if (!trades || trades.length === 0) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <span className="panel-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Trade History
+          </span>
+          <span className="panel-count">0</span>
+        </div>
+        <div className="empty"><div className="empty-icon">📈</div><div className="empty-msg">No closed trades yet</div></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span className="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Trade History
+        </span>
+        <span className="panel-count">{trades.length}</span>
+      </div>
+      <div className="panel-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Entry</th>
+              <th>Exit</th>
+              <th>P&amp;L</th>
+              <th>Result</th>
+              <th>Closed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trades.map((t, i) => (
+              <tr key={i}>
+                <td><strong className="mono">{t.symbol.replace('/USDT','')}</strong><span style={{color:'var(--muted)',fontSize:'11px'}}>/USDT</span></td>
+                <td className="mono">{fmt(t.entry)}</td>
+                <td className="mono">{fmt(t.exit)}</td>
+                <td><PnlCell value={t.pnl_pct} /></td>
+                <td>
+                  {t.reason === 'TP'
+                    ? <Badge type="green">✓ TP Hit</Badge>
+                    : t.reason === 'SL'
+                    ? <Badge type="red">✗ SL Hit</Badge>
+                    : <Badge type="gray">{t.reason}</Badge>}
+                </td>
+                <td style={{color:'var(--muted)'}}>{fmtTime(t.closed_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── AI Decision Log Panel ─────────────────────────────────────────────────
+function AILogPanel({ aiLog }) {
+  if (!aiLog || aiLog.length === 0) {
+    return (
+      <div className="panel panel-full">
+        <div className="panel-header">
+          <span className="panel-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            AI Decision Log
+          </span>
+          <span className="panel-count">0</span>
+        </div>
+        <div className="empty"><div className="empty-icon">🤖</div><div className="empty-msg">No AI decisions yet — waiting for trade signals</div></div>
+      </div>
+    );
+  }
+
+  function confColor(conf) {
+    if (conf >= 0.8) return 'var(--green)';
+    if (conf >= 0.6) return 'var(--amber)';
+    return 'var(--red)';
+  }
+
+  return (
+    <div className="panel panel-full">
+      <div className="panel-header">
+        <span className="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          AI Decision Log
+        </span>
+        <span className="panel-count">{aiLog.length}</span>
+      </div>
+      <div className="panel-body" style={{maxHeight:'380px'}}>
+        {aiLog.map((entry, i) => (
+          <div className="ai-entry" key={i}>
+            <div className="ai-meta">
+              <span className="ai-symbol mono">{entry.symbol}</span>
+              <span className="ai-tf">[{entry.timeframe}]</span>
+              {entry.decision === 'PROCEED'
+                ? <Badge type="green">✓ PROCEED</Badge>
+                : <Badge type="red">✗ REJECT</Badge>}
+              <span className="ai-ts">{fmtTime(entry.timestamp)}</span>
+            </div>
+
+            <div className="conf-bar">
+              <span style={{fontSize:'11px', color:'var(--muted)', width:'64px', flexShrink:0}}>
+                Conf: <strong style={{color: confColor(entry.confidence)}}>{(entry.confidence * 100).toFixed(0)}%</strong>
+              </span>
+              <div className="conf-track">
+                <div className="conf-fill" style={{
+                  width: `${(entry.confidence * 100).toFixed(0)}%`,
+                  background: confColor(entry.confidence)
+                }} />
+              </div>
+            </div>
+
+            {entry.reasoning && (
+              <div className="ai-reasoning">{entry.reasoning}</div>
+            )}
+            {entry.risks && entry.risks.length > 0 && (
+              <div className="ai-risks">
+                {entry.risks.map((r, j) => (
+                  <span key={j} className="risk-tag">⚠ {r}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────
+function App() {
+  const [state, setState] = useState(null);
+  const [wsStatus, setWsStatus] = useState('connecting'); // connecting | live | disconnected
+  const wsRef = useRef(null);
+  const reconnectTimer = useRef(null);
+
+  const connect = useCallback(() => {
+    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${protocol}://${location.host}/ws`);
+    wsRef.current = ws;
+    setWsStatus('connecting');
+
+    ws.onopen = () => {
+      setWsStatus('live');
+      if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'snapshot') setState(msg.data);
+        // 'ping' messages are ignored (keep-alive only)
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      setWsStatus('disconnected');
+      reconnectTimer.current = setTimeout(connect, 3000);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    connect();
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    };
+  }, [connect]);
+
+  // Fallback: poll REST if WebSocket not connected
+  useEffect(() => {
+    if (wsStatus === 'live') return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch('/api/snapshot');
+        const data = await res.json();
+        setState(data);
+      } catch {}
+    }, 5000);
+    return () => clearInterval(id);
+  }, [wsStatus]);
+
+  const meta   = state?.meta   || {};
+  const stats  = state?.stats  || {};
+  const pos    = state?.positions || [];
+  const trades = state?.trades    || [];
+  const aiLog  = state?.ai_log    || [];
+
+  const aiApprovalRate = (stats.ai_approved + stats.ai_rejected) > 0
+    ? Math.round(stats.ai_approved / (stats.ai_approved + stats.ai_rejected) * 100)
+    : 0;
+
+  return (
+    <>
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="navbar-brand">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+            <polyline points="16 7 22 7 22 13"/>
+          </svg>
+          Trading Bot
+        </div>
+        <div className="navbar-right">
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <div className={`status-dot ${meta.is_running === false ? 'offline' : ''}`} />
+            <span className="status-label">{meta.is_running === false ? 'Stopped' : 'Running'}</span>
+          </div>
+          {meta.uptime_seconds != null && (
+            <span className="uptime">↑ {fmtUptime(meta.uptime_seconds)}</span>
+          )}
+          {meta.symbols_tracked > 0 && (
+            <span style={{fontSize:'12px',color:'var(--muted)'}}>
+              {meta.symbols_tracked} pairs
+            </span>
+          )}
+          <span className={`ws-badge ${wsStatus === 'live' ? 'live' : wsStatus === 'connecting' ? 'conn' : 'disc'}`}>
+            {wsStatus === 'live' ? '● LIVE' : wsStatus === 'connecting' ? '◌ Connecting' : '○ Reconnecting'}
+          </span>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <div className="main">
+
+        {/* Stat cards */}
+        <div className="stats-grid">
+          <StatCard
+            label="Open Positions"
+            value={pos.length}
+            valueClass={pos.length > 0 ? 'blue' : ''}
+            sub={pos.length === 1 ? '1 active trade' : `${pos.length} active trades`}
+          />
+          <StatCard
+            label="Total Trades"
+            value={stats.total_trades ?? 0}
+            sub={`${stats.wins ?? 0}W / ${stats.losses ?? 0}L`}
+          />
+          <StatCard
+            label="Win Rate"
+            value={stats.win_rate != null ? `${stats.win_rate}%` : '—'}
+            valueClass={stats.win_rate >= 50 ? 'green' : stats.win_rate > 0 ? 'red' : ''}
+            sub="Closed trades"
+          />
+          <StatCard
+            label="Total P&L"
+            value={stats.total_pnl_pct != null ? fmtPct(stats.total_pnl_pct) : '—'}
+            valueClass={stats.total_pnl_pct > 0 ? 'green' : stats.total_pnl_pct < 0 ? 'red' : ''}
+            sub="Cumulative %"
+          />
+          <StatCard
+            label="AI Approval"
+            value={`${aiApprovalRate}%`}
+            valueClass={aiApprovalRate >= 50 ? 'green' : 'amber'}
+            sub={`${stats.ai_approved ?? 0} approved / ${stats.ai_rejected ?? 0} rejected`}
+          />
+          <StatCard
+            label="Pairs Tracked"
+            value={meta.symbols_tracked ?? '—'}
+            sub="Binance Spot USDT"
+          />
+        </div>
+
+        {/* Positions + Trade History */}
+        <div className="panels">
+          <PositionsPanel positions={pos} />
+          <TradeHistoryPanel trades={trades} />
+        </div>
+
+        {/* AI Log — full width */}
+        <div className="panels">
+          <AILogPanel aiLog={aiLog} />
+        </div>
+
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
