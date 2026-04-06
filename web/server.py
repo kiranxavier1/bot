@@ -36,6 +36,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from web.state import bot_state
 from agents.post_mortem import load_analysis, load_strategy_data, list_all_strategies
@@ -119,6 +120,18 @@ async def api_get_strategy_lessons(strategy: str):
 @app.get("/api/strategies")
 async def api_list_strategies():
     return list_all_strategies()
+
+class AllocationUpdate(BaseModel):
+    pct: float
+
+@app.post("/api/settings/allocation")
+async def api_update_allocation(data: AllocationUpdate):
+    if 1.0 <= data.pct <= 100.0:
+        bot_state.trade_allocation_pct = round(data.pct, 2)
+        bot_state._save_to_disk()
+        await bot_state._broadcast()
+        return {"success": True, "trade_allocation_pct": bot_state.trade_allocation_pct}
+    return JSONResponse(status_code=400, content={"error": "Percentage must be between 1 and 100"})
 
 # ── WebSocket endpoint ────────────────────────────────────────────────────────
 

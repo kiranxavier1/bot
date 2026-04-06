@@ -207,27 +207,11 @@ class ExecutionerAgent:
         atr = calc_atr(symbol_df)
         btc_df = await self._get_df(config.BTC_SYMBOL, config.BTC_TIMEFRAME)
 
+        valid_signals = []
         for sig in strategy_signals:
             strategy = sig["strategy"]
-            conf_candle = sig["confirmation_candle"]
-            entry_est = sig["entry_price"]
-            
-            # Extract strategy-specific or fallback fields
-            swing_tp_math = sig.get("swing_tp_target")
-            trendline = math_result.get("trendline")
-            trendline_slope = trendline.slope if trendline else 0.0
-            touch_count = math_result.get("touch_count", 0)
-            vol_ratio = math_result.get("vol_ratio", 1.0)
-            prox_pct = math_result.get("proximity_pct", 0.0)
-
-            log.info(
-                "🎯 Signal detected: %s [%s] strategy=%s — running pre-trade filters...",
-                symbol, timeframe, strategy,
-            )
-
-            # ── Strategy-specific Filters ─────────────────────────────────────
+            log.info("🎯 Signal detected: %s [%s] strategy=%s — running pre-trade filters...", symbol, timeframe, strategy)
             if strategy in ("bounce", "fvg"):
-                # Strict: need confirmed uptrend + above HTF EMA
                 if not htf_above_ema:
                     log.info("❌ HTF filter rejected %s (%s) — price is BELOW 200-EMA", symbol, strategy)
                     continue
@@ -238,7 +222,6 @@ class ExecutionerAgent:
                     log.info("❌ ADX filter rejected %s (%s) — ADX=%.1f (ranging)", symbol, strategy, adx)
                     continue
             elif strategy in ("vwap_bounce", "rsi_divergence"):
-                # Mild: just need directional bias — ADX ≥ 20 (already filtered in mathematician)
                 if not htf_above_ema:
                     log.info("❌ HTF filter rejected %s (%s) — price is BELOW 200-EMA", symbol, strategy)
                     continue
@@ -246,7 +229,6 @@ class ExecutionerAgent:
                     log.info("❌ Direction rejected %s (%s) — DI- > DI+", symbol, strategy)
                     continue
             elif strategy == "breakout":
-                # Breakout: needs direction confirmed, no strict ADX threshold
                 if di_minus >= di_plus:
                     log.info("❌ Direction rejected %s (%s) — DI- > DI+", symbol, strategy)
                     continue
@@ -256,14 +238,26 @@ class ExecutionerAgent:
                     continue
 
             log.info("✅ Pre-trade filters passed for %s (strategy: %s)", symbol, strategy)
+            valid_signals.append(sig)
 
-            # ── Preliminary entry / SL / TP ──────────────────────────────────
+        if not valid_signals:
+            return
+
+        async def _eval_signal(sig):
+            strategy = sig["strategy"]
+            conf_candle = sig["confirmation_candle"]
+            entry_est = sig["entry_price"]
+            swing_tp_math = sig.get("swing_tp_target")
+            trendline = math_result.get("trendline")
+            trendline_slope = trendline.slope if trendline else 0.0
+            touch_count = math_result.get("touch_count", 0)
+            vol_ratio = math_result.get("vol_ratio", 1.0)
+            prox_pct = math_result.get("proximity_pct", 0.0)
+
             raw_sl = sig.get("stop_loss")
             if not raw_sl:
-                if atr > 0:
-                    raw_sl = calculate_stop_loss_atr(entry_est, atr)
-                else:
-                    raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
+                if atr > 0: raw_sl = calculate_stop_loss_atr(entry_est, atr)
+                else: raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
                     
             raw_tp = sig.get("take_profit")
             tp_source = "strategy_default"
@@ -275,17 +269,6 @@ class ExecutionerAgent:
                     raw_tp = calculate_take_profit(entry_est, raw_sl)
                     tp_source = "fixed_rr"
 
-            # ── Sim trade entry (mirrors real signal) ────────────────────────
-            asyncio.create_task(bot_state.push_sim_entry(
-                symbol=symbol,
-                timeframe=timeframe,
-                entry_price=entry_est,
-                stop_loss=raw_sl,
-                take_profit=raw_tp,
-                strategy=strategy,
-            ))
-
-            # ── Build AI proposal ─────────────────────────────────────────────
             proposal = build_proposal(
                 strategy=strategy,
                 symbol=symbol,
@@ -310,34 +293,63 @@ class ExecutionerAgent:
             )
 
             decision = await self._ai.evaluate(proposal)
+            return sig, decision, raw_sl, raw_tp, swing_tp_math, conf_candle
 
+        eval_tasks = [_eval_signal(sig) for sig in valid_signals]
+        results = await asyncio.gather(*eval_tasks, return_exceptions=True)
+
+        approved = []
+        for result in results:
+            if isinstance(result, Exception):
+                log.error("AI Evaluation failed with exception: %s", result)
+                continue
+            
+            sig, decision, raw_sl, raw_tp, swing_tp_math, conf_candle = result
+            strategy = sig["strategy"]
             if not self._ai.should_proceed(decision):
                 log.info("🤖 AI rejected %s (%s) conf=%.2f — %s", symbol, strategy, decision.get("confidence", 0.0), decision.get("reasoning", "")[:100])
-                await self._notifier.send(
+                # We optionally fire off a reject message here, but async so it doesn't block.
+                asyncio.create_task(self._notifier.send(
                     Notifier.ai_rejected_msg(
                         symbol=symbol,
                         reason=decision.get("reasoning", "No reason given"),
                         confidence=decision.get("confidence", 0.0),
                     )
-                )
-                continue # Try the next signal in the list
-
-            log.info("✅ AI approved %s for %s — executing limit buy", strategy, symbol)
+                ))
+                continue
             
-            # ── Execute Limit Buy ─────────────────────────────────────────────
-            await self._execute_limit_buy(
-                symbol=symbol,
-                conf_candle=conf_candle,
-                atr=atr,
-                swing_tp=swing_tp_math,
-                target_sl=sig.get("stop_loss"),
-                target_tp=sig.get("take_profit"),
-                strategy=strategy,
-                leverage=decision.get("leverage", 1),
-                confidence=decision.get("confidence", 0.0),
-            )
-            # Break out so we don't attempt to enter multiple overlapping strategies at once on the same symbol
-            break
+            approved.append((sig, decision, raw_sl, raw_tp, swing_tp_math, conf_candle))
+
+        if not approved:
+            return
+
+        # Sort by confidence descending, pick the absolute best one
+        approved.sort(key=lambda x: x[1].get("confidence", 0.0), reverse=True)
+        best_sig, best_decision, best_sl, best_tp, best_swing_tp, best_conf_candle = approved[0]
+        strategy = best_sig["strategy"]
+
+        log.info("✅ AI approved best setup (%s) for %s — executing limit buy (conf: %.2f)", strategy, symbol, best_decision.get("confidence", 0.0))
+        
+        asyncio.create_task(bot_state.push_sim_entry(
+            symbol=symbol,
+            timeframe=timeframe,
+            entry_price=best_sig["entry_price"],
+            stop_loss=best_sl,
+            take_profit=best_tp,
+            strategy=strategy,
+        ))
+
+        await self._execute_limit_buy(
+            symbol=symbol,
+            conf_candle=best_conf_candle,
+            atr=atr,
+            swing_tp=best_swing_tp,
+            target_sl=best_sl,
+            target_tp=best_tp,
+            strategy=strategy,
+            leverage=best_decision.get("leverage", 1),
+            confidence=best_decision.get("confidence", 0.0),
+        )
 
     # ── FIX #9 — Limit buy with fill tracking ────────────────────────────────
     async def _execute_limit_buy(

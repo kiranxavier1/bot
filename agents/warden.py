@@ -189,9 +189,8 @@ def calculate_position_size(
     fixed_stake:  float = None,
 ) -> float:
     """
-    Capital-based position sizing.
-    If `fixed_stake` is provided, user deployed that fixed amount (e.g. £50).
-    Otherwise, deploy CAPITAL_PER_TRADE fraction of balance.
+    Capital-based position sizing dynamically driven by the UI dashboard state, 
+    so the bot trades a percentage of the total capital.
     """
     if entry_price <= 0:
         log.warning("Entry price is zero — cannot size position")
@@ -200,10 +199,8 @@ def calculate_position_size(
     if fixed_stake is not None:
         capital_to_deploy = fixed_stake
     else:
-        # Fallback to legacy fractional sizing if no fixed stake provided
-        # Note: config.CAPITAL_PER_TRADE was replaced by CAPITAL_REGULAR in my config edit,
-        # so I should use CAPITAL_REGULAR as the default fallback or handle the rename.
-        capital_to_deploy = balance_usdt * getattr(config, "CAPITAL_REGULAR", 50.0)
+        alloc_pct = bot_state.trade_allocation_pct / 100.0
+        capital_to_deploy = balance_usdt * alloc_pct
     
     return capital_to_deploy / entry_price
 

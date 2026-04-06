@@ -162,11 +162,14 @@ def build_proposal(
             "btc_ok":          btc_sentiment in ("bullish", "neutral"),
             "rsi_ok":          (rsi_val is not None and 40 <= rsi_val <= 70),
         },
-        "continuous_learning_rules": [], # Injected dynamically prior to evaluation
+        "continuous_learning_rules": [], # Negative constraints from past losses
+        "golden_setups": [],             # Positive patterns from past wins
+        "strategy_performance": {},      # Real-time win rate and PNL
         "request": (
             "Evaluate this trade proposal for a 5m scalping/swing entry. "
             "If a clear 5m trend (up or down) is happening, you should lean toward PROCEED. "
             "You MUST rigidly respect any active rules listed in continuous_learning_rules. "
+            "You SHOULD prioritize setups that align with the golden_setups provided. "
             "Select an appropriate leverage (1-20x) based on setup quality and volatility. "
             "Return ONLY valid JSON with keys: "
             "decision (PROCEED or REJECT), confidence (0.0–1.0), "
@@ -174,9 +177,17 @@ def build_proposal(
         ),
     }
     # Retrieve lessons for this strategy
-    from agents.post_mortem import load_strategy_rules
-    lessons = load_strategy_rules(strategy)
-    proposal["continuous_learning_rules"] = lessons
+    from agents.post_mortem import load_strategy_rules, load_strategy_golden_setups, load_strategy_data
+    proposal["continuous_learning_rules"] = load_strategy_rules(strategy)
+    proposal["golden_setups"] = load_strategy_golden_setups(strategy)
+    
+    # Add strategy performance metadata
+    strat_data = load_strategy_data(strategy)
+    proposal["strategy_performance"] = {
+        "wins":   strat_data.get("total_wins_analyzed", 0),
+        "losses": strat_data.get("total_losses_analyzed", 0),
+        "total":  strat_data.get("total_wins_analyzed", 0) + strat_data.get("total_losses_analyzed", 0)
+    }
     
     return proposal
 
@@ -212,10 +223,11 @@ Universal rules
 1. BTC macro: avoid longs when BTC 1h is "bearish" UNLESS R:R ≥ 3.0 OR strategy is "mean_reversion"/"rsi_divergence".
 2. News: REJECT immediately if news_safe is false.
 3. CRITICAL: If any rule in continuous_learning_rules explicitly forbids the specific conditions in this proposal, REJECT.
-4. For all strategies: minimum R:R = 1.5. Prefer 2.0+. Never enter negative-expectancy setups.
-5. Accept MORE opportunities: if the quality_checklist majority passes and R:R ≥ 2.0, lean toward PROCEED even on borderline regime conditions — we want to capture scalp and swing moves, not sit on the sidelines.
-6. 5m Trend Following: On the 5m chart, if a clear uptrend or downtrend is established (ADX > 25), prioritize entering with the trend.
-7. Futures & Leverage: This is a futures trade. Recommended leverage should be higher (10-20x) for high-confidence scalps and lower (3-5x) for swingier or more volatile setups. Max leverage is 20x.
+4. GOLDEN SETUPS: If the proposal closely aligns with any pattern in golden_setups, you should have HIGHER confidence and lean toward PROCEED.
+5. For all strategies: minimum R:R = 1.5. Prefer 2.0+. Never enter negative-expectancy setups.
+6. Accept MORE opportunities: if the quality_checklist majority passes and R:R ≥ 2.0, lean toward PROCEED even on borderline regime conditions — we want to capture scalp and swing moves, not sit on the sidelines.
+7. 5m Trend Following: On the 5m chart, if a clear uptrend or downtrend is established (ADX > 25), prioritize entering with the trend.
+8. Futures & Leverage: This is a futures trade. Recommended leverage should be higher (10-20x) for high-confidence scalps and lower (3-5x) for swingier or more volatile setups. Max leverage is 20x.
 
 Confidence calibration
 ───────────────────────

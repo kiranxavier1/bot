@@ -14,6 +14,8 @@ All timestamps are stored as ISO-8601 strings for easy JSON serialisation.
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -73,6 +75,7 @@ class BotState:
         self.sim_start_balance_gbp: float = 1000.0
         self.sim_balance_gbp: float = 1000.0   # running virtual GBP balance
         self.sim_pnl_gbp: float = 0.0          # cumulative P&L in GBP
+        self.trade_allocation_pct: float = 5.0 # what % of capital to use per trade
         self._sim_open: Dict[str, Dict] = {}   # open sim positions keyed by symbol
         self._sim_trades: Deque[Dict] = deque(maxlen=100)  # closed sim trades
 
@@ -88,10 +91,13 @@ class BotState:
         }
 
         # Queue for Strategy Retraining Agent
-        self.losing_trades_queue: asyncio.Queue = asyncio.Queue()
+        self.closed_trades_queue: asyncio.Queue = asyncio.Queue()
 
         # Subscribers — asyncio Queues that receive state snapshots on change
         self._subscribers: List[asyncio.Queue] = []
+
+        # Load persisted state
+        self._load_from_disk()
 
     # ── Subscription (WebSocket push) ────────────────────────────────────────
     def subscribe(self) -> asyncio.Queue:
@@ -189,10 +195,10 @@ class BotState:
             }
             self._trades.appendleft(trade)
             self._recompute_stats_locked()
+            self._save_to_disk()
             
-            # Phase 3: Pipe losing trades to Continuous Learning agent
-            if pnl_pct < 0 or reason == "SL":
-                self.losing_trades_queue.put_nowait(trade)
+            # Phase 3: Pipe all closed trades to Continuous Learning agent
+            self.closed_trades_queue.put_nowait(trade)
                 
         await self._broadcast()
 
@@ -314,6 +320,7 @@ class BotState:
                 "pnl_pct":      0.0,
                 "opened_at":    _now_iso(),
             }
+            self._save_to_disk()
         await self._broadcast()
 
     async def push_sim_price_update(self, symbol: str, price: float) -> None:
@@ -354,9 +361,10 @@ class BotState:
                 self._sim_trades.appendleft(closed_trade)
                 del self._sim_open[symbol]
                 
-                # Phase 3: Pipe simulated losses to Retraining queue
-                if pnl_pct < 0 or reason == "SL":
-                    self.losing_trades_queue.put_nowait(closed_trade)
+                # Phase 3: Pipe all simulated trades to Retraining queue
+                self.closed_trades_queue.put_nowait(closed_trade)
+                
+                self._save_to_disk()
 
         if closed_trade is not None:
             await self._broadcast()
@@ -408,10 +416,58 @@ class BotState:
                     "balance_gbp":    round(self.sim_balance_gbp, 2),
                     "pnl_gbp":        round(self.sim_pnl_gbp, 2),
                     "start_gbp":      self.sim_start_balance_gbp,
+                    "trade_allocation_pct": self.trade_allocation_pct,
                     "open":           list(self._sim_open.values()),
                     "trades":         list(self._sim_trades),
                 },
             }
+
+    # ── Persistence ───────────────────────────────────────────────────────────
+    def _state_path(self) -> str:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_dir, "data", "state.json")
+
+    def _save_to_disk(self) -> None:
+        """Persist current sim and trade state to disk."""
+        try:
+            path = self._state_path()
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            
+            data = {
+                "sim_balance_gbp":       self.sim_balance_gbp,
+                "sim_start_balance_gbp": self.sim_start_balance_gbp,
+                "sim_pnl_gbp":           self.sim_pnl_gbp,
+                "trade_allocation_pct":  self.trade_allocation_pct,
+                "trades":                list(self._trades),
+                "sim_trades":         list(self._sim_trades),
+                "stats":              self.stats,
+            }
+            
+            with open(path, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            # We fail silently to avoid crashing the bot on disk errors
+            print(f"Error saving state: {e}")
+
+    def _load_from_disk(self) -> None:
+        """Load sim and trade state from disk if available."""
+        try:
+            path = self._state_path()
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    data = json.load(f)
+                
+                self.sim_balance_gbp       = data.get("sim_balance_gbp", 1000.0)
+                self.sim_start_balance_gbp = data.get("sim_start_balance_gbp", 1000.0)
+                self.sim_pnl_gbp           = data.get("sim_pnl_gbp", 0.0)
+                self.trade_allocation_pct  = data.get("trade_allocation_pct", 5.0)
+                
+                # Reconstruct deques
+                self._trades      = deque(data.get("trades", []),      maxlen=MAX_TRADES)
+                self._sim_trades  = deque(data.get("sim_trades", []),  maxlen=100)
+                self.stats        = data.get("stats", self.stats)
+        except Exception as e:
+            print(f"Error loading state: {e}")
 
 
 # ── Global singleton ──────────────────────────────────────────────────────────
