@@ -53,7 +53,7 @@ DISCOVERY_INTERVAL_SECS = 3600
 
 # ── AI / Gemini ───────────────────────────────────────────────────────────────
 GEMINI_API_KEY = _require("GEMINI_API_KEY")
-GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3.0-flash")
+GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3-flash-preview")
 # Lowered from 0.80 → 0.70: capture more good-risk opportunities across all 6 strategies.
 # High-volatility coins need more entries, not fewer. The quality checklist and
 # continuous learning rules still protect against bad setups.
