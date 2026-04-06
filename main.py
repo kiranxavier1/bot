@@ -56,6 +56,7 @@ from web.server          import run_server
 from web.state           import bot_state
 
 log = logging.getLogger("main")
+shutdown_event = None
 
 
 async def seed_btc_1h(registry: BufferRegistry) -> None:
@@ -203,8 +204,16 @@ async def main() -> None:
     log.info("📊 Dashboard → http://localhost:8000")
 
     # ── 8. Run until cancelled ────────────────────────────────────────────────
+    global shutdown_event
+    shutdown_event = asyncio.Event()
+    shutdown_task = asyncio.create_task(shutdown_event.wait(), name="shutdown")
+
     try:
-        await asyncio.gather(*tasks)
+        # Wait until either the shutdown event is tripped or a core task fails/ends
+        await asyncio.wait(
+            tasks + [shutdown_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
     except asyncio.CancelledError:
         pass
     finally:
@@ -221,9 +230,13 @@ async def main() -> None:
 
 def _handle_signal(signum, frame):
     log.info("Signal %s received — initiating shutdown", signum)
-    loop = asyncio.get_event_loop()
-    for task in asyncio.all_tasks(loop):
-        task.cancel()
+    global shutdown_event
+    if shutdown_event is not None:
+        loop = asyncio.get_event_loop()
+        # Thread-safe since signal handlers can fire from different C-level threads
+        loop.call_soon_threadsafe(shutdown_event.set)
+    else:
+        sys.exit(0)
 
 
 if __name__ == "__main__":
