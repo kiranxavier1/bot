@@ -34,7 +34,7 @@ def setup_logging() -> None:
     root.setLevel(log_level)
 
     # Silence noisy third-party loggers
-    for noisy in ("ccxt", "asyncio", "urllib3", "httpx", "anthropic"):
+    for noisy in ("ccxt", "asyncio", "urllib3", "httpx", "google", "grpc"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     fmt_str = (

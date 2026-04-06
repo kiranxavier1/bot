@@ -19,6 +19,8 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Callable, Deque, Dict, List, Optional
 
+import config
+
 # ── Max history sizes ─────────────────────────────────────────────────────────
 MAX_TRADES     = 200
 MAX_AI_LOG     = 100
@@ -121,6 +123,7 @@ class BotState:
         take_profit: float,
         quantity:    float,
         strategy:    str = "bounce",
+        **kwargs,
     ) -> None:
         async with self._lock:
             self.positions[symbol] = {
@@ -130,6 +133,8 @@ class BotState:
                 "stop_loss":    stop_loss,
                 "take_profit":  take_profit,
                 "quantity":     quantity,
+                "leverage":      kwargs.get("leverage", 1),
+                "is_futures":    kwargs.get("is_futures", config.USE_FUTURES),
                 "current_price": entry,
                 "pnl_pct":      0.0,
                 "opened_at":    _now_iso(),
@@ -198,8 +203,9 @@ class BotState:
         timeframe:  str,
         decision:   str,    # "PROCEED" | "REJECT"
         confidence: float,
-        reasoning:  str,
-        risks:      List[str],
+        leverage:   int = 1,
+        reasoning:  str = "",
+        risks:      List[str] = [],
         strategy:   str = "bounce",
     ) -> None:
         async with self._lock:
@@ -209,6 +215,7 @@ class BotState:
                 "strategy":   strategy,
                 "decision":   decision,
                 "confidence": round(confidence, 3),
+                "leverage":   leverage,
                 "reasoning":  reasoning,
                 "risks":      risks,
                 "timestamp":  _now_iso(),
@@ -278,14 +285,20 @@ class BotState:
         stop_loss:   float,
         take_profit: float,
         strategy:    str = "bounce",
+        confidence:  float = 0.7,
     ) -> None:
-        """Open a paper-trade position; stake = £50 or 5% of remaining balance."""
+        """Open a paper-trade position; stake = £100 (confident) or £50 (regular)."""
         async with self._lock:
             if symbol in self._sim_open:
                 return  # already tracking this symbol
-            stake = min(50.0, self.sim_balance_gbp * 0.05)
+            
+            # User request: £100 for confident, £50 for less confident
+            stake = config.CAPITAL_CONFIDENT if confidence >= config.CONFIDENCE_LEVEL else config.CAPITAL_REGULAR
+            stake = min(stake, self.sim_balance_gbp)
+            
             if stake < 1.0:
                 return  # no balance left
+
             self._sim_open[symbol] = {
                 "symbol":       symbol,
                 "timeframe":    timeframe,
@@ -293,7 +306,10 @@ class BotState:
                 "entry":        entry_price,
                 "stop_loss":    stop_loss,
                 "take_profit":  take_profit,
+                "confidence":   confidence,
                 "stake_gbp":    round(stake, 2),
+                "leverage":     5, # Sim default
+                "is_futures":   config.USE_FUTURES,
                 "current":      entry_price,
                 "pnl_pct":      0.0,
                 "opened_at":    _now_iso(),

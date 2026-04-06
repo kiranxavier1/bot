@@ -38,12 +38,12 @@ BINANCE_API_SECRET = _require("BINANCE_API_SECRET")
 EXCHANGE_ID        = "binance"
 QUOTE_CURRENCY     = "USDT"
 
-# FIX #9 — Primary signal timeframe is 15m; 5m used for precise entry timing.
-# Both are streamed via WebSocket so the buffer is always warm.
-# Using 30m instead of 20m for bigger picture because Binance does not natively support 20m
-TIMEFRAMES         = ["5m", "15m", "30m"]
-SIGNAL_TIMEFRAME   = "15m"     # trendline pattern detection
+# Primary signal timeframe is 5m (user requested); 15m and 1h used for HTF trend.
+TIMEFRAMES         = ["5m", "15m", "1h"]
+SIGNAL_TIMEFRAME   = "5m"      # core trading timeframe
 ENTRY_TIMEFRAME    = "5m"      # precise entry confirmation candle
+HTF_FILTER_TF      = "15m"     # visual trend identification (1h also used)
+HTF_SECONDARY_TF   = "1h"      # macro trend
 
 CANDLE_BUFFER_SIZE = 300       # bumped from 200 → 300 to support 1h EMA-200
 
@@ -51,9 +51,9 @@ CANDLE_BUFFER_SIZE = 300       # bumped from 200 → 300 to support 1h EMA-200
 TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "50"))
 DISCOVERY_INTERVAL_SECS = 3600
 
-# ── AI / Claude ───────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
-CLAUDE_MODEL      = _optional("CLAUDE_MODEL", "claude-sonnet-4-6")
+# ── AI / Gemini ───────────────────────────────────────────────────────────────
+GEMINI_API_KEY = _require("GEMINI_API_KEY")
+GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-1.5-flash")
 # Lowered from 0.80 → 0.70: capture more good-risk opportunities across all 6 strategies.
 # High-volatility coins need more entries, not fewer. The quality checklist and
 # continuous learning rules still protect against bad setups.
@@ -87,9 +87,16 @@ VOLUME_LOOKBACK           = 20    # periods for average volume baseline
 # ── Risk management ───────────────────────────────────────────────────────────
 RISK_PER_TRADE = float(_optional("RISK_PER_TRADE", "0.02"))  # 2 % of balance (legacy — kept for fallback)
 
-# Capital-based position sizing: deploy this fraction of free balance per trade.
-# 0.25 = 25 % of available USDT per trade.  Set via .env: CAPITAL_PER_TRADE=0.25
-CAPITAL_PER_TRADE = float(_optional("CAPITAL_PER_TRADE", "0.25"))
+# Capital-based position sizing: deploy this amount (GBP/USDT) per trade.
+# User requested 100 for confident trades, 50 for regular.
+CAPITAL_REGULAR   = float(_optional("CAPITAL_REGULAR", "50.0"))
+CAPITAL_CONFIDENT = float(_optional("CAPITAL_CONFIDENT", "100.0"))
+CONFIDENCE_LEVEL  = 0.85     # threshold for high-stakes trade
+
+# Futures settings
+USE_FUTURES       = True     # Enable futures trading
+MAX_LEVERAGE      = 20       # Cap AI-selected leverage
+DEFAULT_LEVERAGE  = 5
 
 # FIX #4 — ATR-based stop loss (replaces fixed % / candle-low)
 ATR_PERIOD     = 14

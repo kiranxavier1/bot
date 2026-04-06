@@ -124,7 +124,7 @@ async def main() -> None:
     setup_logging()
     log.info("=" * 60)
     log.info("  3rd Touch Trendline Bot — starting up")
-    log.info("  Exchange  : Binance Spot")
+    log.info("  Exchange  : Binance %s", "Futures" if config.USE_FUTURES else "Spot")
     log.info("  AI Model  : %s", config.CLAUDE_MODEL)
     log.info("  Top pairs : %d", config.TOP_N_PAIRS)
     log.info("  Timeframes: %s", config.TIMEFRAMES)
@@ -138,11 +138,12 @@ async def main() -> None:
     warden     = WardenAgent(notifier=notifier)
 
     # Shared exchange instance (REST + WS)
+    options = {"defaultType": "future" if config.USE_FUTURES else "spot"}
     exchange = ccxtpro.binance(
         {
             "apiKey":  config.BINANCE_API_KEY,
             "secret":  config.BINANCE_API_SECRET,
-            "options": {"defaultType": "spot"},
+            "options": options,
             "enableRateLimit": True,
         }
     )
@@ -181,7 +182,7 @@ async def main() -> None:
     # ── 6. Notify bot is live ─────────────────────────────────────────────────
     await notifier.send(
         f"🤖 <b>Trading Bot ONLINE</b>\n"
-        f"Exchange  : Binance Spot\n"
+        f"Exchange  : Binance {'Futures' if config.USE_FUTURES else 'Spot'}\n"
         f"Pairs     : {len(symbols)} USDT symbols\n"
         f"Timeframes: {', '.join(config.TIMEFRAMES)}\n"
         f"AI model  : <code>{config.CLAUDE_MODEL}</code>"

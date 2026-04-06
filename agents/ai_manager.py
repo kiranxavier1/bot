@@ -38,7 +38,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-import anthropic
+import google.generativeai as genai
 
 import config
 from utils.indicators import btc_trend, market_regime, calc_rsi, fetch_news_sentiment
@@ -146,6 +146,10 @@ def build_proposal(
             "htf_above_ema200": htf_above_ema,       # FIX #2
             "news_safe":       news_safe,
         },
+        "htf_trend_context": {
+            "15m_trend": "visual identification", # placeholder for future enrichment
+            "1h_trend":  btc_sentiment,            # btc acts as a proxy for market trend
+        },
         "quality_checklist": {
             # Give Claude a pre-computed quality scorecard
             "ema200_ok":       htf_above_ema,
@@ -160,11 +164,13 @@ def build_proposal(
         },
         "continuous_learning_rules": [], # Injected dynamically prior to evaluation
         "request": (
-            "Evaluate this trade proposal. "
+            "Evaluate this trade proposal for a 5m scalping/swing entry. "
+            "If a clear 5m trend (up or down) is happening, you should lean toward PROCEED. "
             "You MUST rigidly respect any active rules listed in continuous_learning_rules. "
+            "Select an appropriate leverage (1-20x) based on setup quality and volatility. "
             "Return ONLY valid JSON with keys: "
             "decision (PROCEED or REJECT), confidence (0.0–1.0), "
-            "reasoning (string), risks (list of strings)."
+            "leverage (int 1-20), reasoning (string), risks (list of strings)."
         ),
     }
     # Retrieve lessons for this strategy
@@ -208,6 +214,8 @@ Universal rules
 3. CRITICAL: If any rule in continuous_learning_rules explicitly forbids the specific conditions in this proposal, REJECT.
 4. For all strategies: minimum R:R = 1.5. Prefer 2.0+. Never enter negative-expectancy setups.
 5. Accept MORE opportunities: if the quality_checklist majority passes and R:R ≥ 2.0, lean toward PROCEED even on borderline regime conditions — we want to capture scalp and swing moves, not sit on the sidelines.
+6. 5m Trend Following: On the 5m chart, if a clear uptrend or downtrend is established (ADX > 25), prioritize entering with the trend.
+7. Futures & Leverage: This is a futures trade. Recommended leverage should be higher (10-20x) for high-confidence scalps and lower (3-5x) for swingier or more volatile setups. Max leverage is 20x.
 
 Confidence calibration
 ───────────────────────
@@ -220,6 +228,7 @@ Respond ONLY with valid JSON, no markdown:
 {
   "decision":   "PROCEED" or "REJECT",
   "confidence": <float 0.0–1.0>,
+  "leverage":   <int 1–20>,
   "reasoning":  "<concise 1-2 sentence explanation>",
   "risks":      ["<risk 1>", "<risk 2>"]
 }
@@ -230,27 +239,25 @@ Respond ONLY with valid JSON, no markdown:
 
 class AIManager:
     """
-    Sends trade proposals to Claude and returns a structured decision.
+    Sends trade proposals to Gemini and returns a structured decision.
     """
 
     def __init__(self) -> None:
-        self._client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
-        self._model  = config.CLAUDE_MODEL
+        genai.configure(api_key=config.GEMINI_API_KEY)
+        self._model = genai.GenerativeModel(
+            model_name=config.GEMINI_MODEL,
+            system_instruction=_SYSTEM_PROMPT
+        )
 
     async def evaluate(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Send proposal to Claude.  Returns a parsed decision dict.
+        Send proposal to Gemini. Returns a parsed decision dict.
         Falls back to safe REJECT on any API or parse error.
         """
         user_msg = json.dumps(proposal, indent=2)
         try:
-            response = await self._client.messages.create(
-                model=self._model,
-                max_tokens=512,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}],
-            )
-            raw_text = response.content[0].text.strip()
+            response = await self._model.generate_content_async(user_msg)
+            raw_text = response.text.strip()
             decision = self._parse_decision(raw_text)
 
             log.info(
@@ -268,6 +275,7 @@ class AIManager:
                 timeframe=trade.get("timeframe", "?"),
                 decision=decision.get("decision", "REJECT"),
                 confidence=decision.get("confidence", 0.0),
+                leverage=decision.get("leverage", 1),
                 reasoning=decision.get("reasoning", ""),
                 risks=decision.get("risks", []),
                 strategy=trade.get("strategy", "bounce"),
@@ -307,16 +315,19 @@ class AIManager:
 
         decision   = str(data.get("decision", "REJECT")).upper()
         confidence = float(data.get("confidence", 0.0))
+        leverage   = int(data.get("leverage", 1))
         reasoning  = str(data.get("reasoning", ""))
         risks: List[str] = [str(r) for r in data.get("risks", [])]
 
         if decision not in ("PROCEED", "REJECT"):
             decision = "REJECT"
         confidence = max(0.0, min(1.0, confidence))
+        leverage   = max(1, min(config.MAX_LEVERAGE, leverage))
 
         return {
             "decision":   decision,
             "confidence": confidence,
+            "leverage":   leverage,
             "reasoning":  reasoning,
             "risks":      risks,
         }

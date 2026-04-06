@@ -127,7 +127,7 @@ class ExecutionerAgent:
                 await self._monitor_position(symbol, closed_candle, candles)
             return
 
-        # ── Only look for new entries on the signal timeframe ─────────────────
+        # ── Only look for new entries on the signal timeframe (5m) ─────────────
         if timeframe != config.SIGNAL_TIMEFRAME:
             return
 
@@ -196,9 +196,13 @@ class ExecutionerAgent:
                 rr=_rr,
             ))
 
-        # ── Pre-compute common filters ────────────────────────────────────────
-        htf_df = await self._get_htf_df(symbol)
-        htf_above_ema = price_above_ema200(htf_df) if htf_df is not None else True
+        # ── Pre-compute common filters (15m + 1h) ────────────────────────────
+        htf_15m_df = await self._get_htf_df(symbol, "15m")
+        htf_1h_df  = await self._get_htf_df(symbol, "1h")
+        
+        # EMA filter on 1h (macro)
+        htf_above_ema = price_above_ema200(htf_1h_df) if htf_1h_df is not None else True
+        
         regime, adx, di_plus, di_minus = market_regime(symbol_df)
         atr = calc_atr(symbol_df)
         btc_df = await self._get_df(config.BTC_SYMBOL, config.BTC_TIMEFRAME)
@@ -329,6 +333,8 @@ class ExecutionerAgent:
                 target_sl=sig.get("stop_loss"),
                 target_tp=sig.get("take_profit"),
                 strategy=strategy,
+                leverage=decision.get("leverage", 1),
+                confidence=decision.get("confidence", 0.0),
             )
             # Break out so we don't attempt to enter multiple overlapping strategies at once on the same symbol
             break
@@ -343,6 +349,8 @@ class ExecutionerAgent:
         target_sl: Optional[float] = None,
         target_tp: Optional[float] = None,
         strategy:  str = "bounce",
+        leverage:  int = 1,
+        confidence: float = 0.0,
     ) -> None:
         """
         Place a limit buy at the current ask price (fills like a market order
@@ -385,8 +393,24 @@ class ExecutionerAgent:
                 take_profit = swing_tp
             else:
                 take_profit = calculate_take_profit(ask_price, stop_loss)
+            
+            # User request: £100 for confident, £50 for regular
+            stake_gbp = config.CAPITAL_CONFIDENT if confidence >= config.CONFIDENCE_LEVEL else config.CAPITAL_REGULAR
 
-            quantity = calculate_position_size(usdt_free, ask_price, stop_loss)
+            # ── Futures Setup ────────────────────────────────────────────────
+            if config.USE_FUTURES:
+                try:
+                    await self._exchange.set_leverage(leverage, symbol)
+                    log.info("🎯 Leverage set to %dx for %s", leverage, symbol)
+                except Exception as lev_exc:
+                    log.warning("Failed to set leverage for %s: %s", symbol, lev_exc)
+
+            quantity = calculate_position_size(
+                balance_usdt=usdt_free, 
+                entry_price=ask_price, 
+                stop_loss=stop_loss,
+                fixed_stake=stake_gbp
+            )
             if quantity <= 0:
                 log.warning("Zero quantity for %s — skipping", symbol)
                 return
@@ -485,6 +509,8 @@ class ExecutionerAgent:
                 take_profit=take_profit,
                 quantity=float(order.get("filled", quantity)),
                 strategy=strategy,
+                leverage=leverage if config.USE_FUTURES else 1,
+                is_futures=config.USE_FUTURES,
             )
 
             # ── Telegram notification ─────────────────────────────────────────
@@ -636,16 +662,13 @@ class ExecutionerAgent:
         except Exception:
             return None
 
-    async def _get_htf_df(self, symbol: str) -> Optional[pd.DataFrame]:
+    async def _get_htf_df(self, symbol: str, tf: str = None) -> Optional[pd.DataFrame]:
         """
-        FIX #2 — Get the 1h DataFrame for the higher-timeframe EMA filter.
-
-        Checks the buffer registry first (populated if 1h is in TIMEFRAMES).
-        Falls back to a REST fetch so the filter always runs regardless of
-        whether the scout is streaming 1h data.
+        Fetch historical candles for HTF filtering.
         """
-        # Check registry (e.g. if someone adds "1h" to TIMEFRAMES in future)
-        buf = self._registry.get(symbol, config.HTF_FILTER_TF)
+        tf = tf or config.HTF_FILTER_TF
+        # Check registry
+        buf = self._registry.get(symbol, tf)
         if buf is not None:
             try:
                 df = await buf.to_dataframe()

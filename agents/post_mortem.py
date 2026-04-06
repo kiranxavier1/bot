@@ -27,7 +27,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import anthropic
+import google.generativeai as genai
 import config
 
 from web.state import bot_state
@@ -164,8 +164,16 @@ class RetrainingAgent:
     """
 
     def __init__(self, exchange=None):
-        self._client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
-        self._model = config.CLAUDE_MODEL
+        genai.configure(api_key=config.GEMINI_API_KEY)
+        self._model = genai.GenerativeModel(
+            model_name=config.GEMINI_MODEL,
+            system_instruction=(
+                "You are a quantitative trading analyst. You analyze losing trades "
+                "and produce structured JSON post-mortem reports. Be specific and "
+                "actionable. Every rule you create must be concrete enough for an AI "
+                "to evaluate on the next trade."
+            )
+        )
         self._exchange = exchange
         self._running = False
         _ensure_dirs()
@@ -244,18 +252,8 @@ Output ONLY valid JSON (no markdown):
 }}"""
 
         try:
-            response = await self._client.messages.create(
-                model=self._model,
-                max_tokens=800,
-                system=(
-                    "You are a quantitative trading analyst. You analyze losing trades "
-                    "and produce structured JSON post-mortem reports. Be specific and "
-                    "actionable. Every rule you create must be concrete enough for an AI "
-                    "to evaluate on the next trade."
-                ),
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = response.content[0].text.strip()
+            response = await self._model.generate_content_async(prompt)
+            raw = response.text.strip()
 
             # Strip markdown if present
             if "```" in raw:

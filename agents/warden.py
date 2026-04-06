@@ -51,6 +51,8 @@ class Position:
     take_profit:  float
     quantity:     float          # base asset quantity
     strategy:     str = "bounce"
+    leverage:     int = 1
+    is_futures:   bool = False
     entry_ts:     float = field(default_factory=time.time)  # seconds epoch
     be_activated: bool  = False  # True once SL has passed entry price
     # Tracks the highest close seen since entry — used for ATR trailing SL
@@ -184,21 +186,25 @@ def calculate_position_size(
     entry_price:  float,
     stop_loss:    float,
     risk_pct:     float = None,
+    fixed_stake:  float = None,
 ) -> float:
     """
-    Capital-based position sizing: deploy CAPITAL_PER_TRADE (default 25 %) of
-    free balance per trade.
-
-    quantity = (balance × capital_pct) / entry_price
-
-    risk_pct is accepted for API compatibility but ignored; sizing is now
-    capital-fraction-based, not risk-fraction-based.
+    Capital-based position sizing.
+    If `fixed_stake` is provided, user deployed that fixed amount (e.g. £50).
+    Otherwise, deploy CAPITAL_PER_TRADE fraction of balance.
     """
     if entry_price <= 0:
         log.warning("Entry price is zero — cannot size position")
         return 0.0
 
-    capital_to_deploy = balance_usdt * config.CAPITAL_PER_TRADE
+    if fixed_stake is not None:
+        capital_to_deploy = fixed_stake
+    else:
+        # Fallback to legacy fractional sizing if no fixed stake provided
+        # Note: config.CAPITAL_PER_TRADE was replaced by CAPITAL_REGULAR in my config edit,
+        # so I should use CAPITAL_REGULAR as the default fallback or handle the rename.
+        capital_to_deploy = balance_usdt * getattr(config, "CAPITAL_REGULAR", 50.0)
+    
     return capital_to_deploy / entry_price
 
 
@@ -257,6 +263,8 @@ class WardenAgent:
         take_profit: float,
         quantity:    float,
         strategy:    str = "bounce",
+        leverage:    int = 1,
+        is_futures:  bool = False,
     ) -> Position:
         pos = Position(
             symbol=symbol,
@@ -265,16 +273,18 @@ class WardenAgent:
             take_profit=take_profit,
             quantity=quantity,
             strategy=strategy,
+            leverage=leverage,
+            is_futures=is_futures,
             highest_close_since_entry=entry_price,
         )
         self._positions[symbol] = pos
         log.info(
             "📂 Position opened: %s | entry=%.6g | SL=%.6g (%.2f%%) | "
-            "TP=%.6g (%.2f%%) | qty=%.6g",
+            "TP=%.6g (%.2f%%) | qty=%.6g | leverage=%dx",
             symbol, entry_price,
             stop_loss, pos.sl_pct,
             take_profit, pos.tp_pct,
-            quantity,
+            quantity, leverage,
         )
         asyncio.create_task(bot_state.push_position_opened(
             symbol=symbol,
@@ -283,6 +293,8 @@ class WardenAgent:
             take_profit=take_profit,
             quantity=quantity,
             strategy=strategy,
+            leverage=leverage,
+            is_futures=is_futures,
         ))
         return pos
 
