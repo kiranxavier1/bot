@@ -861,7 +861,7 @@ function StrategyLearningPanel() {
 // ── Settings Panel ────────────────────────────────────────────────────────
 function SettingsPanel({ tradeAllocationPct }) {
   const [val, setVal] = useState(tradeAllocationPct || 5);
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState('idle'); // idle, loading, success
   
   useEffect(() => {
     if (tradeAllocationPct) setVal(tradeAllocationPct);
@@ -869,15 +869,16 @@ function SettingsPanel({ tradeAllocationPct }) {
 
   const handleApply = async () => {
     try {
-      setLoading(true);
+      setStatus('loading');
       await fetch('/api/settings/allocation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pct: parseFloat(val) })
       });
-      setLoading(false);
+      setStatus('success');
+      setTimeout(() => setStatus('idle'), 2000);
     } catch {
-      setLoading(false);
+      setStatus('idle');
     }
   };
 
@@ -903,10 +904,14 @@ function SettingsPanel({ tradeAllocationPct }) {
           </div>
           <button 
             onClick={handleApply} 
-            disabled={loading} 
-            style={{background:'var(--accent)', color:'#fff', border:'none', padding:'12px 24px', borderRadius:'6px', fontWeight:600, cursor:'pointer', minWidth:'100px'}}
+            disabled={status === 'loading'} 
+            style={{
+              background: status === 'success' ? 'var(--green)' : 'var(--accent)', 
+              color:'#fff', border:'none', padding:'12px 24px', borderRadius:'6px', fontWeight:600, cursor:'pointer', minWidth:'120px',
+              transition: 'background 0.3s ease'
+            }}
           >
-            {loading ? 'Saving...' : 'Apply'}
+            {status === 'loading' ? 'Saving...' : status === 'success' ? '✓ Applied!' : 'Apply'}
           </button>
         </div>
       </div>
