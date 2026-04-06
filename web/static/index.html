@@ -118,6 +118,18 @@
     .scan-price { font-size: 12px; color: var(--muted); }
     .scan-pulse { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--blue-bg); animation: pulse 2s infinite; }
 
+    /* Sim trade entries */
+    .sim-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .sim-row:last-child { border-bottom: none; }
+    .sim-row:hover { background: #f9fafb; }
+    .sim-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .sim-right { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+    .sim-result-icon { font-size: 18px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+    .sim-result-icon.win  { background: var(--green-bg); color: var(--green); }
+    .sim-result-icon.loss { background: var(--red-bg); color: var(--red); }
+    .sim-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--border); }
+    .sim-gbp { font-weight: 700; font-size: 12px; }
+
     /* Empty state */
     .empty { padding: 48px 20px; text-align: center; color: var(--muted); }
     .empty-icon { font-size: 32px; margin-bottom: 10px; }
@@ -492,6 +504,97 @@ function ScanLogPanel({ scanLog }) {
   );
 }
 
+// ── Simulate Opportunity Panel ─────────────────────────────────────────
+function fmtGbp(n) {
+  if (n == null) return '£0.00';
+  const v = Number(n);
+  const sign = v >= 0 ? '+' : '';
+  return sign + '£' + Math.abs(v).toFixed(2);
+}
+
+function SimulatePanel({ sim }) {
+  const openTrades = sim?.open || [];
+  const closedTrades = sim?.trades || [];
+  const totalCount = openTrades.length + closedTrades.length;
+
+  if (totalCount === 0) {
+    return (
+      <div className="panel panel-full">
+        <div className="panel-header">
+          <span className="panel-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Simulated Opportunities
+          </span>
+          <span className="panel-count">0</span>
+        </div>
+        <div className="empty"><div className="empty-icon">💰</div><div className="empty-msg">No simulated trades yet — waiting for signals</div></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel panel-full">
+      <div className="panel-header">
+        <span className="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Simulated Opportunities
+        </span>
+        <span className="panel-count">{totalCount}</span>
+      </div>
+      <div className="panel-body" style={{maxHeight: '420px'}}>
+        {/* Open Sim Positions */}
+        {openTrades.length > 0 && (
+          <>
+            <div className="sim-section-label">● Open Positions ({openTrades.length})</div>
+            {openTrades.map((t, i) => (
+              <div className="sim-row" key={'o-'+i}>
+                <div className="sim-left">
+                  <strong className="mono">{t.symbol.replace('/USDT','')}</strong>
+                  <span className="ai-tf">[{t.timeframe}]</span>
+                  <span className="mono" style={{fontSize:'12px'}}>Entry: {fmt(t.entry)}</span>
+                  <span className="mono" style={{fontSize:'12px',color:'var(--muted)'}}>Now: {fmt(t.current)}</span>
+                  <span className="sim-gbp" style={{color:'var(--accent)'}}>£{t.stake_gbp}</span>
+                </div>
+                <div className="sim-right">
+                  <PnlCell value={t.pnl_pct} />
+                  <Badge type="blue">○ OPEN</Badge>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Closed Sim Trades */}
+        {closedTrades.length > 0 && (
+          <>
+            <div className="sim-section-label">✔ Closed Trades ({closedTrades.length})</div>
+            {closedTrades.map((t, i) => {
+              const isWin = t.pnl_pct >= 0;
+              return (
+                <div className="sim-row" key={'c-'+i}>
+                  <div className="sim-left">
+                    <strong className="mono">{t.symbol.replace('/USDT','')}</strong>
+                    <span className="ai-tf">[{t.timeframe}]</span>
+                    <span className="mono" style={{fontSize:'12px'}}>{fmt(t.entry)} → {fmt(t.exit)}</span>
+                    <span className={`sim-gbp ${isWin ? 'pnl-pos' : 'pnl-neg'}`}>{fmtGbp(t.pnl_gbp)}</span>
+                    <span style={{fontSize:'11px',color:'var(--muted)'}}>{fmtTime(t.closed_at)}</span>
+                  </div>
+                  <div className="sim-right">
+                    <PnlCell value={t.pnl_pct} />
+                    <div className={`sim-result-icon ${isWin ? 'win' : 'loss'}`}>
+                      {isWin ? '✓' : '✗'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────
 function App() {
   const [state, setState] = useState(null);
@@ -556,6 +659,7 @@ function App() {
   const aiLog  = state?.ai_log    || [];
   const alerts = state?.alerts    || [];
   const scanLog = state?.scan_log || [];
+  const sim    = state?.sim      || {};
 
   const aiApprovalRate = (stats.ai_approved + stats.ai_rejected) > 0
     ? Math.round(stats.ai_approved / (stats.ai_approved + stats.ai_rejected) * 100)
@@ -630,6 +734,18 @@ function App() {
             value={meta.symbols_tracked ?? '—'}
             sub="Binance Spot USDT"
           />
+          <StatCard
+            label="Sim Balance"
+            value={sim.balance_gbp != null ? `£${Number(sim.balance_gbp).toFixed(2)}` : '£1,000.00'}
+            valueClass={sim.pnl_gbp > 0 ? 'green' : sim.pnl_gbp < 0 ? 'red' : ''}
+            sub={`Started at £${sim.start_gbp ?? 1000}`}
+          />
+          <StatCard
+            label="Sim P&L"
+            value={sim.pnl_gbp != null ? fmtGbp(sim.pnl_gbp) : '£0.00'}
+            valueClass={sim.pnl_gbp > 0 ? 'green' : sim.pnl_gbp < 0 ? 'red' : ''}
+            sub={`${(sim.open || []).length} open sim trades`}
+          />
         </div>
 
         {/* Positions + Trade History */}
@@ -643,6 +759,11 @@ function App() {
           <ScanLogPanel scanLog={scanLog} />
           <LeadsPanel alerts={alerts} />
           <AILogPanel aiLog={aiLog} />
+        </div>
+
+        {/* Simulate Opportunity */}
+        <div className="panels">
+          <SimulatePanel sim={sim} />
         </div>
 
       </div>

@@ -64,6 +64,13 @@ class BotState:
         self._scan_log: Deque[Dict] = deque(maxlen=60)
         self._last_scan_broadcast: float = 0.0
 
+        # ── Simulation (paper trading) ────────────────────────────────────────
+        self.sim_start_balance_gbp: float = 1000.0
+        self.sim_balance_gbp: float = 1000.0   # running virtual GBP balance
+        self.sim_pnl_gbp: float = 0.0          # cumulative P&L in GBP
+        self._sim_open: Dict[str, Dict] = {}   # open sim positions keyed by symbol
+        self._sim_trades: Deque[Dict] = deque(maxlen=100)  # closed sim trades
+
         # Aggregate stats (recomputed on each trade close)
         self.stats: Dict[str, Any] = {
             "total_trades":   0,
@@ -228,6 +235,74 @@ class BotState:
             self._last_scan_broadcast = now
             await self._broadcast()
 
+    # ── Simulation (paper trading) ────────────────────────────────────────────
+    async def push_sim_entry(
+        self,
+        symbol:      str,
+        timeframe:   str,
+        entry_price: float,
+        stop_loss:   float,
+        take_profit: float,
+    ) -> None:
+        """Open a paper-trade position; stake = £50 or 5% of remaining balance."""
+        async with self._lock:
+            if symbol in self._sim_open:
+                return  # already tracking this symbol
+            stake = min(50.0, self.sim_balance_gbp * 0.05)
+            if stake < 1.0:
+                return  # no balance left
+            self._sim_open[symbol] = {
+                "symbol":       symbol,
+                "timeframe":    timeframe,
+                "entry":        entry_price,
+                "stop_loss":    stop_loss,
+                "take_profit":  take_profit,
+                "stake_gbp":    round(stake, 2),
+                "current":      entry_price,
+                "pnl_pct":      0.0,
+                "opened_at":    _now_iso(),
+            }
+        await self._broadcast()
+
+    async def push_sim_price_update(self, symbol: str, price: float) -> None:
+        """Update live price for an open sim position; auto-close if SL/TP hit."""
+        closed_trade: Optional[Dict] = None
+        async with self._lock:
+            pos = self._sim_open.get(symbol)
+            if pos is None:
+                return
+            entry = pos["entry"]
+            pnl_pct = (price - entry) / entry * 100 if entry > 0 else 0.0
+            pos["current"] = price
+            pos["pnl_pct"] = round(pnl_pct, 3)
+
+            hit_sl = price <= pos["stop_loss"]
+            hit_tp = price >= pos["take_profit"]
+
+            if hit_sl or hit_tp:
+                reason = "TP" if hit_tp else "SL"
+                stake  = pos["stake_gbp"]
+                gbp_pnl = stake * pnl_pct / 100
+                self.sim_pnl_gbp = round(self.sim_pnl_gbp + gbp_pnl, 2)
+                self.sim_balance_gbp = round(self.sim_balance_gbp + gbp_pnl, 2)
+                closed_trade = {
+                    "symbol":     symbol,
+                    "timeframe":  pos["timeframe"],
+                    "entry":      entry,
+                    "exit":       price,
+                    "pnl_pct":    round(pnl_pct, 3),
+                    "pnl_gbp":    round(gbp_pnl, 2),
+                    "stake_gbp":  stake,
+                    "reason":     reason,
+                    "opened_at":  pos["opened_at"],
+                    "closed_at":  _now_iso(),
+                }
+                self._sim_trades.appendleft(closed_trade)
+                del self._sim_open[symbol]
+
+        if closed_trade is not None:
+            await self._broadcast()
+
     # ── Bot meta ──────────────────────────────────────────────────────────────
     async def set_symbols_tracked(self, count: int) -> None:
         async with self._lock:
@@ -270,6 +345,13 @@ class BotState:
                 "alerts":    list(self._alerts),
                 "scan_log":  list(self._scan_log),
                 "stats":     dict(self.stats),
+                "sim": {
+                    "balance_gbp":    round(self.sim_balance_gbp, 2),
+                    "pnl_gbp":        round(self.sim_pnl_gbp, 2),
+                    "start_gbp":      self.sim_start_balance_gbp,
+                    "open":           list(self._sim_open.values()),
+                    "trades":         list(self._sim_trades),
+                },
             }
 
 

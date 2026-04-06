@@ -183,6 +183,10 @@ class ScoutAgent:
                 asyncio.create_task(
                     bot_state.push_scan_event(symbol, timeframe, float(candles[-1][4]))
                 )
+                # Drive sim position SL/TP monitoring
+                asyncio.create_task(
+                    bot_state.push_sim_price_update(symbol, float(candles[-1][4]))
+                )
 
                 # Detect candle close event
                 latest_ts = int(candles[-1][0])

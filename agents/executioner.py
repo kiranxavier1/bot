@@ -243,6 +243,15 @@ class ExecutionerAgent:
             entry_est, raw_sl, raw_tp, tp_source, atr,
         )
 
+        # ── Sim trade entry (paper trade mirrors real signal) ─────────────────
+        asyncio.create_task(bot_state.push_sim_entry(
+            symbol=symbol,
+            timeframe=timeframe,
+            entry_price=entry_est,
+            stop_loss=raw_sl,
+            take_profit=raw_tp,
+        ))
+
         # ── Fetch context DataFrames for AI ───────────────────────────────────
         btc_df = await self._get_df(config.BTC_SYMBOL, config.BTC_TIMEFRAME)
 
