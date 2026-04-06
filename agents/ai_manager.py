@@ -1,10 +1,10 @@
 """
 agents/ai_manager.py  (v2)
 ─────────────────────────────────────────────────────────────────────────────
-The Strategic Manager — AI gating layer via Claude.
+The Strategic Manager — AI gating layer via Gemini.
 
 Before the Executioner places a limit buy, a rich Trade Proposal JSON is
-sent to Claude.  Claude returns a structured JSON decision:
+sent to Gemini.  Gemini returns a structured JSON decision:
 
     {
         "decision":   "PROCEED" | "REJECT",
@@ -16,7 +16,7 @@ sent to Claude.  Claude returns a structured JSON decision:
 The Executioner proceeds ONLY if:
     decision == "PROCEED"  AND  confidence >= MIN_AI_CONFIDENCE
 
-Context now passed to Claude (v2 additions in ★)
+Context now passed to Gemini (v2 additions in ★)
 ──────────────────────────────────────────────────
 • Trade proposal (symbol, timeframe, entry, SL, TP, trendline stats)
 • BTC 1h trend (bullish / bearish / neutral)
@@ -74,9 +74,9 @@ def build_proposal(
     htf_above_ema:       bool  = True,
 ) -> Dict[str, Any]:
     """
-    Assemble a rich Trade Proposal for Claude.
+    Assemble a rich Trade Proposal for Gemini.
 
-    v2 additions give Claude the full picture of every fix so it can reason
+    v2 additions give Gemini the full picture of every fix so it can reason
     about setup quality with the same detail a human trader would use.
     """
     # ── Technical context from DataFrames ─────────────────────────────────────
@@ -151,7 +151,7 @@ def build_proposal(
             "1h_trend":  btc_sentiment,            # btc acts as a proxy for market trend
         },
         "quality_checklist": {
-            # Give Claude a pre-computed quality scorecard
+            # Give Gemini a pre-computed quality scorecard
             "ema200_ok":       htf_above_ema,
             "adx_trending":    adx >= config.ADX_TREND_THRESHOLD,
             "di_direction_ok": di_plus > di_minus,
@@ -303,12 +303,12 @@ class AIManager:
                 "decision":   "REJECT",
                 "confidence": 0.0,
                 "reasoning":  f"API error: {exc}",
-                "risks":      ["Claude API unavailable"],
+                "risks":      ["Gemini API unavailable"],
             }
 
     @staticmethod
     def _parse_decision(text: str) -> Dict[str, Any]:
-        """Extract and validate the JSON block from Claude's response."""
+        """Extract and validate the JSON block from Gemini's response."""
         # Strip optional markdown code fences
         if "```" in text:
             start = text.find("{")

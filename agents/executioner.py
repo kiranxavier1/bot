@@ -329,15 +329,6 @@ class ExecutionerAgent:
         strategy = best_sig["strategy"]
 
         log.info("✅ AI approved best setup (%s) for %s — executing limit buy (conf: %.2f)", strategy, symbol, best_decision.get("confidence", 0.0))
-        
-        asyncio.create_task(bot_state.push_sim_entry(
-            symbol=symbol,
-            timeframe=timeframe,
-            entry_price=best_sig["entry_price"],
-            stop_loss=best_sl,
-            take_profit=best_tp,
-            strategy=strategy,
-        ))
 
         await self._execute_limit_buy(
             symbol=symbol,
@@ -376,6 +367,7 @@ class ExecutionerAgent:
             balance   = await self._exchange.fetch_balance()
             usdt_free = float(balance.get("USDT", {}).get("free", 0.0))
             self._warden.daily_loss.set_start_balance(usdt_free)
+            asyncio.create_task(bot_state.update_live_balance(usdt_free))
 
             if usdt_free < 10:
                 log.warning(

@@ -71,13 +71,10 @@ class BotState:
         self._scan_log: Deque[Dict] = deque(maxlen=60)
         self._last_scan_broadcast: float = 0.0
 
-        # ── Simulation (paper trading) ────────────────────────────────────────
-        self.sim_start_balance_gbp: float = 1000.0
-        self.sim_balance_gbp: float = 1000.0   # running virtual GBP balance
-        self.sim_pnl_gbp: float = 0.0          # cumulative P&L in GBP
+        # ── Live Trading ──────────────────────────────────────────────────────
+        self.live_balance_usdt: float = 0.0
+        self.live_pnl_usdt: float = 0.0
         self.trade_allocation_pct: float = 5.0 # what % of capital to use per trade
-        self._sim_open: Dict[str, Dict] = {}   # open sim positions keyed by symbol
-        self._sim_trades: Deque[Dict] = deque(maxlen=100)  # closed sim trades
 
         # Aggregate stats (recomputed on each trade close)
         self.stats: Dict[str, Any] = {
@@ -157,6 +154,11 @@ class BotState:
                 if pos["entry"] > 0:
                     pos["pnl_pct"] = (current_price - pos["entry"]) / pos["entry"] * 100
         await self._broadcast()
+        
+    async def update_live_balance(self, balance_usdt: float) -> None:
+        async with self._lock:
+            self.live_balance_usdt = balance_usdt
+        await self._broadcast()
 
     async def push_breakeven_activated(self, symbol: str, new_sl: float) -> None:
         async with self._lock:
@@ -194,6 +196,15 @@ class BotState:
                 "real":       True,
             }
             self._trades.appendleft(trade)
+            
+            # Tally USDT P&L if quantity is available
+            qty = pos.get("quantity")
+            if qty and exit_price and entry:
+                # Realised P&L calculation: (exit - entry) * base_qty
+                # (For shorts, if any, it would be opposite. Assume long for now.)
+                realised = (exit_price - entry) * qty
+                self.live_pnl_usdt += realised
+
             self._recompute_stats_locked()
             self._save_to_disk()
             
@@ -282,92 +293,6 @@ class BotState:
             self._last_scan_broadcast = now
             await self._broadcast()
 
-    # ── Simulation (paper trading) ────────────────────────────────────────────
-    async def push_sim_entry(
-        self,
-        symbol:      str,
-        timeframe:   str,
-        entry_price: float,
-        stop_loss:   float,
-        take_profit: float,
-        strategy:    str = "bounce",
-        confidence:  float = 0.7,
-    ) -> None:
-        """Open a paper-trade position; stake = £100 (confident) or £50 (regular)."""
-        async with self._lock:
-            if symbol in self._sim_open:
-                return  # already tracking this symbol
-            
-            # User request: £100 for confident, £50 for less confident
-            stake = config.CAPITAL_CONFIDENT if confidence >= config.CONFIDENCE_LEVEL else config.CAPITAL_REGULAR
-            stake = min(stake, self.sim_balance_gbp)
-            
-            if stake < 1.0:
-                return  # no balance left
-
-            self._sim_open[symbol] = {
-                "symbol":       symbol,
-                "timeframe":    timeframe,
-                "strategy":     strategy,
-                "entry":        entry_price,
-                "stop_loss":    stop_loss,
-                "take_profit":  take_profit,
-                "confidence":   confidence,
-                "stake_gbp":    round(stake, 2),
-                "leverage":     5, # Sim default
-                "is_futures":   config.USE_FUTURES,
-                "current":      entry_price,
-                "pnl_pct":      0.0,
-                "opened_at":    _now_iso(),
-            }
-            self._save_to_disk()
-        await self._broadcast()
-
-    async def push_sim_price_update(self, symbol: str, price: float) -> None:
-        """Update live price for an open sim position; auto-close if SL/TP hit."""
-        closed_trade: Optional[Dict] = None
-        async with self._lock:
-            pos = self._sim_open.get(symbol)
-            if pos is None:
-                return
-            entry = pos["entry"]
-            pnl_pct = (price - entry) / entry * 100 if entry > 0 else 0.0
-            pos["current"] = price
-            pos["pnl_pct"] = round(pnl_pct, 3)
-
-            hit_sl = price <= pos["stop_loss"]
-            hit_tp = price >= pos["take_profit"]
-
-            if hit_sl or hit_tp:
-                reason = "TP" if hit_tp else "SL"
-                stake  = pos["stake_gbp"]
-                gbp_pnl = stake * pnl_pct / 100
-                self.sim_pnl_gbp = round(self.sim_pnl_gbp + gbp_pnl, 2)
-                self.sim_balance_gbp = round(self.sim_balance_gbp + gbp_pnl, 2)
-                closed_trade = {
-                    "symbol":     symbol,
-                    "timeframe":  pos["timeframe"],
-                    "entry":      entry,
-                    "exit":       price,
-                    "pnl_pct":    round(pnl_pct, 3),
-                    "pnl_gbp":    round(gbp_pnl, 2),
-                    "stake_gbp":  stake,
-                    "reason":     reason,
-                    "strategy":   pos.get("strategy", "bounce"),
-                    "opened_at":  pos["opened_at"],
-                    "closed_at":  _now_iso(),
-                    "real":       False,
-                }
-                self._sim_trades.appendleft(closed_trade)
-                del self._sim_open[symbol]
-                
-                # Phase 3: Pipe all simulated trades to Retraining queue
-                self.closed_trades_queue.put_nowait(closed_trade)
-                
-                self._save_to_disk()
-
-        if closed_trade is not None:
-            await self._broadcast()
 
     # ── Bot meta ──────────────────────────────────────────────────────────────
     async def set_symbols_tracked(self, count: int) -> None:
@@ -413,12 +338,11 @@ class BotState:
                 "scan_log":  list(self._scan_log),
                 "stats":     dict(self.stats),
                 "sim": {
-                    "balance_gbp":    round(self.sim_balance_gbp, 2),
-                    "pnl_gbp":        round(self.sim_pnl_gbp, 2),
-                    "start_gbp":      self.sim_start_balance_gbp,
+                    "balance_usdt":    round(self.live_balance_usdt, 2),
+                    "pnl_usdt":        round(self.live_pnl_usdt, 2),
                     "trade_allocation_pct": self.trade_allocation_pct,
-                    "open":           list(self._sim_open.values()),
-                    "trades":         list(self._sim_trades),
+                    "open":           list(self.positions.values()),
+                    "trades":         list(self._trades),
                 },
             }
 
@@ -434,13 +358,11 @@ class BotState:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             
             data = {
-                "sim_balance_gbp":       self.sim_balance_gbp,
-                "sim_start_balance_gbp": self.sim_start_balance_gbp,
-                "sim_pnl_gbp":           self.sim_pnl_gbp,
+                "live_balance_usdt":     self.live_balance_usdt,
+                "live_pnl_usdt":         self.live_pnl_usdt,
                 "trade_allocation_pct":  self.trade_allocation_pct,
                 "trades":                list(self._trades),
-                "sim_trades":         list(self._sim_trades),
-                "stats":              self.stats,
+                "stats":                 self.stats,
             }
             
             with open(path, "w") as f:
@@ -457,14 +379,12 @@ class BotState:
                 with open(path, "r") as f:
                     data = json.load(f)
                 
-                self.sim_balance_gbp       = data.get("sim_balance_gbp", 1000.0)
-                self.sim_start_balance_gbp = data.get("sim_start_balance_gbp", 1000.0)
-                self.sim_pnl_gbp           = data.get("sim_pnl_gbp", 0.0)
+                self.live_balance_usdt     = data.get("live_balance_usdt", 0.0)
+                self.live_pnl_usdt         = data.get("live_pnl_usdt", 0.0)
                 self.trade_allocation_pct  = data.get("trade_allocation_pct", 5.0)
                 
                 # Reconstruct deques
                 self._trades      = deque(data.get("trades", []),      maxlen=MAX_TRADES)
-                self._sim_trades  = deque(data.get("sim_trades", []),  maxlen=100)
                 self.stats        = data.get("stats", self.stats)
         except Exception as e:
             print(f"Error loading state: {e}")

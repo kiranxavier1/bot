@@ -157,6 +157,15 @@ async def main() -> None:
         warden=warden,
         notifier=notifier,
     )
+
+    # ── Fetch Initial Live Balance ───────────────────────────────────────────
+    try:
+        balance_data = await exchange.fetch_balance()
+        usdt_free = float(balance_data.get("USDT", {}).get("free", 0.0))
+        await bot_state.update_live_balance(usdt_free)
+        log.info("Loaded real USDT balance: %.2f", usdt_free)
+    except Exception as e:
+        log.error("Failed to load initial live balance: %s", e)
     
     retrainer = RetrainingAgent(exchange=exchange)
 
