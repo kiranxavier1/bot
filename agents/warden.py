@@ -34,6 +34,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 import config
+import pandas as pd
 from agents.mathematician import find_pivot_lows
 from utils.indicators import calc_atr
 from web.state import bot_state
@@ -138,6 +139,58 @@ class DailyLossTracker:
 
 
 # ── Risk calculations ─────────────────────────────────────────────────────────
+
+def find_structural_sl_from_df(
+    df_htf:      pd.DataFrame,
+    entry_price: float,
+    atr:         float,
+    n:           int = 3,
+) -> float:
+    """
+    Structural stop loss — anchored to real market structure instead of a
+    pure ATR formula.  Looks at the last 40 candles on the given (15m) DataFrame,
+    finds the most recent pivot low that is:
+      • strictly below the entry price
+      • within 6% of the entry price (realistic support, not ancient history)
+
+    Places the SL 0.2% below that pivot low (STRUCTURAL_SL_BUFFER), ensuring
+    price must close *through* real support before we're stopped out.
+
+    Floor rule: SL is always at least SL_MIN_ATR_MULT × ATR below entry so
+    noise wicks on very tight structures don't create an impossibly tight stop.
+
+    Falls back to ATR_MULTIPLIER × ATR if no qualifying pivot is found.
+    """
+    try:
+        if df_htf is None or len(df_htf) < 2 * n + 5 or atr <= 0:
+            return entry_price - atr * config.ATR_MULTIPLIER
+
+        # Convert DataFrame tail to list-of-dicts for find_pivot_lows
+        candles = df_htf.tail(40).to_dict("records")
+        pivots  = find_pivot_lows(candles, n=n)
+
+        max_dist   = entry_price * 0.06          # pivot must be within 6% of entry
+        candidates = [
+            p.low for p in pivots
+            if p.low < entry_price and (entry_price - p.low) <= max_dist
+        ]
+
+        if candidates:
+            best_pivot   = max(candidates)       # highest pivot below entry (tightest valid structure)
+            structural   = best_pivot * (1.0 - config.STRUCTURAL_SL_BUFFER)
+            atr_floor    = entry_price - atr * config.SL_MIN_ATR_MULT
+            result       = min(structural, atr_floor)  # take wider (lower) stop
+            log.debug(
+                "Structural SL: pivot=%.6g → sl=%.6g  (atr_floor=%.6g)",
+                best_pivot, result, atr_floor,
+            )
+            return result
+
+    except Exception as exc:
+        log.warning("Structural SL calculation failed: %s — falling back to ATR SL", exc)
+
+    return entry_price - atr * config.ATR_MULTIPLIER
+
 
 def calculate_stop_loss_atr(
     entry_price: float,
@@ -440,56 +493,66 @@ class WardenAgent:
             return "TP"
 
         # ── Trailing Stop Loss: ATR-based + Structure (unified) ──────────────
-        # Runs on every candle — never stops, even after break-even is reached.
-        # Candidate 1: ATR trailing  →  highest_close - ATR × multiplier
+        # Candidate 1: ATR trailing  →  highest_close - TSL_ATR_MULTIPLIER × ATR
         # Candidate 2: Structure     →  most recent post-entry pivot low
-        # Final SL = max(both candidates, current SL)  — only ever moves up.
+        # Final SL = max(both candidates, current SL) — only ever moves up.
+        #
+        # ACTIVATION GUARD: TSL only begins once the trade is in profit by at
+        # least TSL_ACTIVATION_ATR_MULT × ATR.  This prevents the trail from
+        # tightening during normal early-entry noise and causing premature exits.
         if candles:
             best_trail = pos.stop_loss  # never allow SL to go backward
+            trail_atr  = 0.0
 
-            # ── ATR trail ────────────────────────────────────────────────────
             if len(candles) >= config.ATR_PERIOD + 2:
                 try:
                     df_trail = pd.DataFrame(
                         candles[-50:],
                         columns=["timestamp", "open", "high", "low", "close", "volume"],
                     )
-                    atr = calc_atr(df_trail)
-                    if atr > 0:
-                        # Keep a high-water mark of the close price since entry
-                        pos.highest_close_since_entry = max(
-                            pos.highest_close_since_entry, latest_close
-                        )
-                        atr_trail = pos.highest_close_since_entry - atr * config.ATR_MULTIPLIER
-                        best_trail = max(best_trail, atr_trail)
+                    trail_atr = calc_atr(df_trail)
                 except Exception as _exc:
                     log.debug("ATR trail calc failed for %s: %s", symbol, _exc)
 
-            # ── Structure trail ───────────────────────────────────────────────
-            struct_sl = self._find_structure_sl(pos, candles)
-            if struct_sl:
-                best_trail = max(best_trail, struct_sl)
+            # Check activation: must be sufficiently in profit before trailing starts
+            activation_threshold = pos.entry_price + trail_atr * config.TSL_ACTIVATION_ATR_MULT
+            tsl_active = (trail_atr <= 0) or (latest_close >= activation_threshold)
 
-            # ── Apply if improved ─────────────────────────────────────────────
-            if best_trail > pos.stop_loss:
-                old_sl        = pos.stop_loss
-                pos.stop_loss = best_trail
+            if tsl_active:
+                # ── ATR trail ──────────────────────────────────────────────
+                if trail_atr > 0:
+                    pos.highest_close_since_entry = max(
+                        pos.highest_close_since_entry, latest_close
+                    )
+                    atr_trail  = pos.highest_close_since_entry - trail_atr * config.TSL_ATR_MULTIPLIER
+                    best_trail = max(best_trail, atr_trail)
 
-                if best_trail >= pos.entry_price:
-                    pos.be_activated = True
-                    label = "Break-Even ✅"
-                else:
-                    label = "TSL trailed"
+                # ── Structure trail ─────────────────────────────────────────
+                struct_sl = self._find_structure_sl(pos, candles)
+                if struct_sl:
+                    best_trail = max(best_trail, struct_sl)
 
-                log.info(
-                    "🔁 %s: %s | SL %.6g → %.6g (high=%.6g)",
-                    label, symbol, old_sl, best_trail,
-                    pos.highest_close_since_entry,
-                )
-                asyncio.create_task(bot_state.push_breakeven_activated(
-                    symbol=symbol, new_sl=best_trail
-                ))
-                return "TSL"
+                # ── Apply if improved ───────────────────────────────────────
+                if best_trail > pos.stop_loss:
+                    old_sl        = pos.stop_loss
+                    pos.stop_loss = best_trail
+                    is_be         = best_trail >= pos.entry_price
+
+                    if is_be:
+                        pos.be_activated = True
+                        label = "Break-Even ✅"
+                    else:
+                        label = "TSL trailed"
+
+                    log.info(
+                        "🔁 %s: %s | SL %.6g → %.6g (high=%.6g)",
+                        label, symbol, old_sl, best_trail,
+                        pos.highest_close_since_entry,
+                    )
+                    asyncio.create_task(bot_state.push_breakeven_activated(
+                        symbol=symbol, new_sl=best_trail, be_activated=is_be
+                    ))
+                    return "TSL"
 
         return None
 

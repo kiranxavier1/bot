@@ -53,6 +53,7 @@ from agents.warden        import (
     calculate_stop_loss,
     calculate_take_profit,
     calculate_position_size,
+    find_structural_sl_from_df,
 )
 from utils.candle_buffer   import BufferRegistry
 from utils.indicators     import (
@@ -256,8 +257,14 @@ class ExecutionerAgent:
 
             raw_sl = sig.get("stop_loss")
             if not raw_sl:
-                if atr > 0: raw_sl = calculate_stop_loss_atr(entry_est, atr)
-                else: raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
+                if atr > 0 and config.USE_STRUCTURAL_SL and htf_15m_df is not None:
+                    # Structural SL: anchored to 15m pivot lows — much harder to stop-hunt
+                    raw_sl = find_structural_sl_from_df(htf_15m_df, entry_est, atr)
+                    log.info("📐 Structural SL for %s: %.6g (15m pivot-based)", symbol, raw_sl)
+                elif atr > 0:
+                    raw_sl = calculate_stop_loss_atr(entry_est, atr)
+                else:
+                    raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
                     
             raw_tp = sig.get("take_profit")
             tp_source = "strategy_default"
@@ -363,6 +370,15 @@ class ExecutionerAgent:
         _ENTRY_ORDER_TIMEOUT seconds.  If not filled in time, cancel and skip.
         """
         try:
+            # ── Concurrent position guard ─────────────────────────────────────
+            open_count = len(self._warden.active_positions())
+            if open_count >= config.MAX_CONCURRENT_POSITIONS:
+                log.info(
+                    "⛔ Max concurrent positions (%d/%d) reached — skipping %s",
+                    open_count, config.MAX_CONCURRENT_POSITIONS, symbol,
+                )
+                return
+
             # ── Fetch balance (FIX #6 seeds daily tracker) ───────────────────
             balance   = await self._exchange.fetch_balance()
             if config.USE_FUTURES:
@@ -602,11 +618,13 @@ class ExecutionerAgent:
         pos = self._warden.get_position(symbol)
         if pos is None:
             return
-        saved_qty   = pos.quantity
-        saved_entry = pos.entry_price
-        saved_sl    = pos.stop_loss
-        saved_tp    = pos.take_profit
-        saved_strat = pos.strategy
+        saved_qty          = pos.quantity
+        saved_entry        = pos.entry_price
+        saved_sl           = pos.stop_loss
+        saved_tp           = pos.take_profit
+        saved_strat        = pos.strategy
+        saved_sl_order_id  = pos.sl_order_id
+        saved_tp_order_id  = pos.tp_order_id
 
         result = await self._warden.check_position(
             symbol=symbol,
@@ -618,6 +636,48 @@ class ExecutionerAgent:
 
         if result in ("SL", "TP"):
             exit_price = saved_sl if result == "SL" else saved_tp
+
+            # ── Dual-exit guard ───────────────────────────────────────────────
+            # Binance STOP_MARKET / TAKE_PROFIT_MARKET may have already fired
+            # intra-candle.  Check actual exchange position size before placing
+            # a second sell — otherwise we'd create an unintended short.
+            if config.USE_FUTURES:
+                try:
+                    exchange_positions = await self._exchange.fetch_positions([symbol])
+                    already_flat = all(
+                        abs(float(p.get("contracts") or p.get("positionAmt") or 0)) < 0.0001
+                        for p in exchange_positions
+                        if p.get("symbol") in (symbol, symbol.replace("/", ""))
+                    )
+                    if already_flat:
+                        log.info(
+                            "✅ %s already flat on exchange (native SL/TP fired) — "
+                            "skipping manual sell, syncing dashboard",
+                            symbol,
+                        )
+                        pnl_pct = (exit_price - saved_entry) / saved_entry * 100
+                        await self._notifier.send(
+                            Notifier.trade_closed_msg(
+                                symbol=symbol, reason=f"{result}_NATIVE",
+                                entry=saved_entry, exit_price=exit_price, pnl_pct=pnl_pct,
+                            )
+                        )
+                        return
+                except Exception as guard_exc:
+                    log.warning(
+                        "Dual-exit guard check failed for %s: %s — proceeding with sell",
+                        symbol, guard_exc,
+                    )
+
+            # ── Cancel remaining exchange SL/TP orders before selling ─────────
+            # Prevents a race where our limit-sell AND the native order both fill.
+            if config.USE_FUTURES:
+                for oid in filter(None, [saved_sl_order_id, saved_tp_order_id]):
+                    try:
+                        await self._exchange.cancel_order(oid, symbol)
+                        log.info("🧹 Cancelled exchange order %s before manual sell", oid)
+                    except Exception:
+                        pass  # already filled or cancelled — safe to ignore
 
             await self._execute_sell(symbol, exit_price, quantity=saved_qty)
 
@@ -667,7 +727,8 @@ class ExecutionerAgent:
                     f"{'(Break-Even ✅)' if pos.be_activated else '(trailing 📈)'}"
                 )
                 asyncio.create_task(bot_state.push_breakeven_activated(
-                    symbol=symbol, new_sl=pos.stop_loss, sl_order_id=pos.sl_order_id
+                    symbol=symbol, new_sl=pos.stop_loss, sl_order_id=pos.sl_order_id,
+                    be_activated=pos.be_activated,
                 ))
 
     # ── Execute a limit sell ──────────────────────────────────────────────────

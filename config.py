@@ -94,8 +94,9 @@ TRADE_ALLOCATION_PCT = float(_optional("TRADE_ALLOCATION_PCT", "30.0"))  # 30 % 
 
 # Futures settings
 USE_FUTURES       = True      # Enabled for AWS Static IP
-MAX_LEVERAGE      = 20        # Cap AI-selected leverage
-DEFAULT_LEVERAGE  = 15
+MAX_LEVERAGE             = 20        # Cap AI-selected leverage
+DEFAULT_LEVERAGE         = 15
+MAX_CONCURRENT_POSITIONS = int(_optional("MAX_CONCURRENT_POSITIONS", "5"))  # capital guard
 
 
 # Minimum free balance (USDT) before the bot will open a new trade.
@@ -104,7 +105,18 @@ MIN_TRADE_BALANCE = float(_optional("MIN_TRADE_BALANCE", "2.0"))  # $2 minimum
 
 # FIX #4 — ATR-based stop loss (replaces fixed % / candle-low)
 ATR_PERIOD     = 14
-ATR_MULTIPLIER = float(_optional("ATR_MULTIPLIER", "1.5"))   # SL = entry − 1.5×ATR
+ATR_MULTIPLIER = float(_optional("ATR_MULTIPLIER", "2.5"))   # SL = entry − 2.5×ATR (wider to survive noise wicks)
+
+# Structural SL — use 15m pivot lows to anchor SL at real support levels
+# instead of a pure ATR mathematical level.  Much harder to stop-hunt.
+USE_STRUCTURAL_SL     = True
+STRUCTURAL_SL_BUFFER  = float(_optional("STRUCTURAL_SL_BUFFER", "0.002"))   # 0.2% below pivot low
+SL_MIN_ATR_MULT       = float(_optional("SL_MIN_ATR_MULT", "1.5"))          # floor: SL ≥ 1.5×ATR below entry
+
+# Trailing SL — only activate trailing when sufficiently in profit.
+# Prevents TSL from tightening during early entry noise and causing premature exits.
+TSL_ACTIVATION_ATR_MULT = float(_optional("TSL_ACTIVATION_ATR_MULT", "1.0"))  # trail only when profit ≥ 1×ATR
+TSL_ATR_MULTIPLIER      = float(_optional("TSL_ATR_MULTIPLIER", "2.0"))        # wider trail once active
 
 # FIX #11 + USER SWING INSIGHT — target just below previous swing high
 # If no valid swing high found, fall back to min RR ratio below (User requested 3-4x profit risk)
@@ -149,6 +161,10 @@ RSI_DIVERGENCE_OVERSOLD = float(_optional("RSI_DIVERGENCE_OVERSOLD", "45"))
 # Minimum 24h high-low range as % of price; filters stablecoins & low-vol coins
 # 3% daily range = coin can actually produce scalping / swing profits
 MIN_DAILY_RANGE_PCT = float(_optional("MIN_DAILY_RANGE_PCT", "3.0"))
+
+# Dashboard — throttle live price broadcast to avoid WS overload
+# P&L updates at most every N seconds per open position
+PRICE_UPDATE_THROTTLE_SECS = float(_optional("PRICE_UPDATE_THROTTLE_SECS", "2.0"))
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_LEVEL = _optional("LOG_LEVEL", "INFO").upper()

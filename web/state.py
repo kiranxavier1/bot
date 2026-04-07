@@ -71,6 +71,9 @@ class BotState:
         self._scan_log: Deque[Dict] = deque(maxlen=60)
         self._last_scan_broadcast: float = 0.0
 
+        # Throttle per-symbol price update broadcasts (avoid WS overload on tick stream)
+        self._price_update_times: Dict[str, float] = {}
+
         # ── Live Trading ──────────────────────────────────────────────────────
         self.live_balance_usdt: float = 0.0
         self.live_pnl_usdt: float = 0.0
@@ -148,26 +151,47 @@ class BotState:
         await self._broadcast()
 
     async def push_price_update(self, symbol: str, current_price: float) -> None:
-        """Called periodically to keep live P&L accurate (optional)."""
+        """Called on every WS tick to keep live P&L accurate.
+        Broadcast is throttled per-symbol (PRICE_UPDATE_THROTTLE_SECS) to avoid
+        overwhelming WebSocket subscribers when 40+ streams fire simultaneously.
+        """
+        has_position = False
         async with self._lock:
             pos = self.positions.get(symbol)
             if pos:
                 pos["current_price"] = current_price
                 if pos["entry"] > 0:
                     pos["pnl_pct"] = (current_price - pos["entry"]) / pos["entry"] * 100
-        await self._broadcast()
+                has_position = True
+
+        # Only broadcast when there is an open position to update, and only
+        # at most every PRICE_UPDATE_THROTTLE_SECS seconds per symbol.
+        if has_position:
+            now = time.time()
+            if now - self._price_update_times.get(symbol, 0) >= config.PRICE_UPDATE_THROTTLE_SECS:
+                self._price_update_times[symbol] = now
+                await self._broadcast()
         
     async def update_live_balance(self, balance_usdt: float) -> None:
         async with self._lock:
             self.live_balance_usdt = balance_usdt
         await self._broadcast()
 
-    async def push_breakeven_activated(self, symbol: str, new_sl: float, sl_order_id: str = None) -> None:
+    async def push_breakeven_activated(
+        self,
+        symbol: str,
+        new_sl: float,
+        sl_order_id: str = None,
+        be_activated: bool = False,   # caller sets True only when SL >= entry
+    ) -> None:
         async with self._lock:
             pos = self.positions.get(symbol)
             if pos:
-                pos["stop_loss"]    = new_sl
-                pos["be_activated"] = True
+                pos["stop_loss"] = new_sl
+                # Never flip be_activated back to False; only set it when the
+                # trailing SL has actually passed the entry price (break-even).
+                if be_activated:
+                    pos["be_activated"] = True
                 if sl_order_id:
                     pos["sl_order_id"] = sl_order_id
         await self._broadcast()
