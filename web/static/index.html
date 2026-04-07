@@ -769,6 +769,8 @@ function SettingsPanel({ tradeAllocationPct }) {
   const [val, setVal] = useState(tradeAllocationPct || 5);
   const [status, setStatus] = useState('idle'); // idle, loading, success
   const [updateStatus, setUpdateStatus] = useState('idle');
+  const [testStatus, setTestStatus]   = useState('idle');   // idle | loading
+  const [testResult, setTestResult]   = useState(null);     // last test result
   
   useEffect(() => {
     if (tradeAllocationPct) setVal(tradeAllocationPct);
@@ -801,6 +803,20 @@ function SettingsPanel({ tradeAllocationPct }) {
       setTimeout(() => setUpdateStatus('idle'), 3000);
     } catch {
       setUpdateStatus('idle');
+    }
+  };
+
+  const handleTestTrade = async () => {
+    setTestStatus('loading');
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/test-trade', { method: 'POST' });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (e) {
+      setTestResult({ success: false, error: String(e) });
+    } finally {
+      setTestStatus('idle');
     }
   };
 
@@ -842,19 +858,46 @@ function SettingsPanel({ tradeAllocationPct }) {
         
         <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
           <div style={{flex: 1}}>
-            <div style={{fontWeight:600, fontSize:'14px', marginBottom:'10px'}}>System Code Updates (CI/CD)</div>
-            <div style={{color:'var(--muted)', fontSize:'12px'}}>Pulls the latest code from GitHub and gracefully reloads the Python backend instantly.</div>
+            <div style={{fontWeight:600, fontSize:'14px', marginBottom:'10px'}}>🧪 Test Order Flow (DOGE/USDT)</div>
+            <div style={{color:'var(--muted)', fontSize:'12px'}}>
+              Fires a real <strong>Market Buy → 4s wait → Market Sell</strong> on DOGE/USDT (~$6 notional, 1× leverage).<br/>
+              <span style={{color:'var(--amber)'}}>⚠ This is a live trade — a small spread/fee loss may occur.</span>
+            </div>
+            {testResult && (
+              <div style={{marginTop:'10px', padding:'10px 14px', borderRadius:'6px',
+                background: testResult.success ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                border: `1px solid ${testResult.success ? 'var(--green)' : 'var(--red)'}`,
+                fontSize:'12px', fontFamily:'monospace'}}>
+                {testResult.success ? (
+                  <>
+                    ✅ <strong>BUY</strong> {testResult.qty} DOGE @ ${testResult.buy_price?.toFixed(5)} &nbsp;|&nbsp;
+                    <strong>SELL</strong> @ ${testResult.sell_price?.toFixed(5)} &nbsp;|&nbsp;
+                    P&L: <span style={{color: testResult.pnl_usdt >= 0 ? 'var(--green)' : 'var(--red)'}}>
+                      {testResult.pnl_usdt >= 0 ? '+' : ''}{testResult.pnl_usdt} USDT
+                    </span>
+                    <div style={{marginTop:'4px', color:'var(--muted)'}}>
+                      Buy ID: {testResult.buy_id?.slice(-8)} | Sell ID: {testResult.sell_id?.slice(-8)}
+                    </div>
+                  </>
+                ) : (
+                  <>❌ <strong>Error:</strong> {testResult.error}</>
+                )}
+              </div>
+            )}
           </div>
-          <button 
-            onClick={handleUpdate} 
-            disabled={updateStatus === 'loading'} 
+          <button
+            onClick={handleTestTrade}
+            disabled={testStatus === 'loading'}
             style={{
-              background: updateStatus === 'loading' ? 'var(--muted)' : (updateStatus === 'success' ? 'var(--green)' : 'var(--accent)'), 
-              color:'#fff', border:'none', padding:'12px 24px', borderRadius:'6px', fontWeight:600, cursor:'pointer', minWidth:'180px',
-              transition: 'background 0.3s ease'
+              background: testStatus === 'loading' ? 'var(--muted)' :
+                          testResult?.success ? 'var(--green)' :
+                          testResult && !testResult.success ? 'var(--red)' : '#7c3aed',
+              color:'#fff', border:'none', padding:'12px 24px', borderRadius:'6px',
+              fontWeight:600, cursor: testStatus === 'loading' ? 'not-allowed' : 'pointer',
+              minWidth:'160px', transition:'background 0.3s ease'
             }}
           >
-            {updateStatus === 'loading' ? 'Updating & Restarting...' : updateStatus === 'success' ? '✓ Rebooting...' : '↓ Pull & Restart Bot'}
+            {testStatus === 'loading' ? '⏳ Trading...' : '🧪 Run Test Trade'}
           </button>
         </div>
 

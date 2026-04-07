@@ -133,6 +133,87 @@ async def api_update_allocation(data: AllocationUpdate):
         return {"success": True, "trade_allocation_pct": bot_state.trade_allocation_pct}
     return JSONResponse(status_code=400, content={"error": "Percentage must be between 1 and 100"})
 
+
+# ── Test trade (order-flow verification) ──────────────────────────────────────
+# Set by main.py after exchange is initialised
+_test_exchange = None
+
+def set_test_exchange(exchange) -> None:
+    global _test_exchange
+    _test_exchange = exchange
+
+@app.post("/api/test-trade")
+async def api_test_trade():
+    """
+    Fires a real market buy on DOGE/USDT (minimum notional, ~$1 worth),
+    waits 4 seconds, then market sells the full qty.
+    Use this to verify order placement is working end-to-end.
+    """
+    import config as _cfg
+
+    if _test_exchange is None:
+        return JSONResponse(status_code=503, content={"error": "Exchange not initialised yet — bot still starting up."})
+
+    symbol = "DOGE/USDT"
+    try:
+        # Step 1: get current price
+        ticker = await _test_exchange.fetch_ticker(symbol)
+        price  = float(ticker.get("last") or ticker.get("close") or 0)
+        if price <= 0:
+            return JSONResponse(status_code=500, content={"error": f"Could not fetch price for {symbol}"})
+
+        # Step 2: calculate minimum viable qty (~$1.50 notional to clear Binance's $5 min)
+        # Use $6 notional to be safe with leverage
+        notional = 6.0
+        raw_qty  = notional / price
+        qty = float(_test_exchange.amount_to_precision(symbol, raw_qty))
+
+        # Step 3: set leverage (use 1x for test — safest)
+        try:
+            await _test_exchange.set_leverage(1, symbol)
+        except Exception:
+            pass  # ignore if already set
+
+        # Step 4: market BUY
+        log.info("🧪 TEST TRADE: Market Buy %s qty=%.4g @ ~%.4g", symbol, qty, price)
+        buy_order = await _test_exchange.create_order(
+            symbol, "market", "buy", qty,
+            params={"positionSide": "BOTH"},
+        )
+        buy_price = float(buy_order.get("average") or buy_order.get("price") or price)
+        log.info("🧪 TEST BUY filled: %s qty=%.4g @ %.4g | id=%s", symbol, qty, buy_price, buy_order.get("id"))
+
+        # Step 5: wait 4 seconds
+        await asyncio.sleep(4)
+
+        # Step 6: market SELL (close)
+        log.info("🧪 TEST TRADE: Market Sell %s qty=%.4g", symbol, qty)
+        sell_order = await _test_exchange.create_order(
+            symbol, "market", "sell", qty,
+            params={"positionSide": "BOTH"},
+        )
+        sell_price = float(sell_order.get("average") or sell_order.get("price") or price)
+        pnl        = (sell_price - buy_price) * qty
+        log.info("🧪 TEST SELL filled: %s qty=%.4g @ %.4g | pnl=%+.4f USDT | id=%s",
+                 symbol, qty, sell_price, pnl, sell_order.get("id"))
+
+        return {
+            "success":    True,
+            "symbol":     symbol,
+            "qty":        qty,
+            "buy_price":  buy_price,
+            "sell_price": sell_price,
+            "pnl_usdt":   round(pnl, 4),
+            "buy_id":     buy_order.get("id"),
+            "sell_id":    sell_order.get("id"),
+        }
+
+    except Exception as exc:
+        log.error("🧪 TEST TRADE FAILED: %s", exc, exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+
 class UpdatePayload(BaseModel):
     action: str
 

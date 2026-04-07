@@ -52,7 +52,7 @@ from agents.ai_manager   import AIManager
 from agents.warden       import WardenAgent
 from agents.executioner  import ExecutionerAgent
 from agents.post_mortem  import RetrainingAgent
-from web.server          import run_server
+from web.server          import run_server, set_test_exchange
 from web.state           import bot_state
 
 log = logging.getLogger("main")
@@ -157,6 +157,9 @@ async def main() -> None:
         warden=warden,
         notifier=notifier,
     )
+
+    # Share exchange with the web server for the test-trade button
+    set_test_exchange(exchange)
 
     # ── Fetch Initial Live Balance ───────────────────────────────────────────
     try:

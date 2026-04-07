@@ -560,6 +560,10 @@ class ExecutionerAgent:
         candles: List[Dict],   # FIX #8: passed to Warden for structure BE
     ) -> None:
         """Check SL / TP / structure-BE on each candle close for open position."""
+
+        # Send live price to dashboard so P&L updates continuously
+        await bot_state.push_price_update(symbol, float(candle["close"]))
+
         # ── CRITICAL: capture position data BEFORE Warden potentially closes it ──
         pos = self._warden.get_position(symbol)
         if pos is None:
