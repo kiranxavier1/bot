@@ -95,7 +95,7 @@ TRADE_ALLOCATION_PCT = float(_optional("TRADE_ALLOCATION_PCT", "30.0"))  # 30 % 
 # Futures settings
 USE_FUTURES       = True      # Enabled for AWS Static IP
 MAX_LEVERAGE      = 20        # Cap AI-selected leverage
-DEFAULT_LEVERAGE  = 5
+DEFAULT_LEVERAGE  = 15
 
 
 # Minimum free balance (USDT) before the bot will open a new trade.
