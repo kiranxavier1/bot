@@ -442,8 +442,9 @@ class MathematicianAgent:
                 result["strategy_signals"].append({
                     "strategy": "mean_reversion",
                     "entry_price": float(last_closed["close"]),
-                    "stop_loss": float(last_closed["low"] * 0.998), # tight SL just below the wick
-                    "take_profit": float(mid), # TP at the SMA (middle band)
+                    "stop_loss": float(last_closed["low"] * 0.998),  # tight SL just below the wick
+                    "take_profit": float(mid),  # TP at the SMA (middle band)
+                    "swing_tp_target": find_swing_tp_target(candles, float(last_closed["close"]), float(last_closed["low"] * 0.998)),
                     "confirmation_candle": last_closed,
                     "adx": adx,
                 })
@@ -552,7 +553,7 @@ class MathematicianAgent:
                 # Candle touched VWAP (low ≤ VWAP) and closed above it (bounce)
                 if last_closed["low"] <= vwap * 1.001 and last_closed["close"] > vwap:
                     vol_rat = volume_ratio(last_closed, df)
-                    if vol_rat >= config.VWAP_VOLUME_MULTIPLIER:
+                    if vol_rat >= config.VWAP_VOLUME_MULTIPLIER:  # 1.2x — lower bar than trendline bounce
                         atr_sl = vwap * (1 - 0.005)  # 0.5% below VWAP as default SL
                         swing_tp = find_swing_tp_target(candles, last_closed["close"], atr_sl)
                         result["strategy_signals"].append({
@@ -582,7 +583,7 @@ class MathematicianAgent:
             # Confirmation: current candle closes above the divergence low (reversal initiated)
             if last_closed["close"] > divergence["price_low2"]:
                 vol_rat = volume_ratio(last_closed, df)
-                if vol_rat >= config.VOLUME_CONFIRM_MULTIPLIER:
+                if vol_rat >= 1.0:  # RSI divergence is structural — any volume is fine
                     sl = divergence["price_low2"] * 0.997  # 0.3% below the divergence low
                     swing_tp = find_swing_tp_target(candles, last_closed["close"], sl)
                     result["strategy_signals"].append({

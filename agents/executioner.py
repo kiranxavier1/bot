@@ -450,7 +450,7 @@ class ExecutionerAgent:
                 # Futures: use create_order with 'positionSide'='BOTH' for one-way mode
                 order = await self._exchange.create_order(
                     symbol, "limit", "buy", quantity, limit_price,
-                    params={"timeInForce": "GTC", "positionSide": "LONG"},
+                    params={"timeInForce": "GTC", "positionSide": "BOTH"},
                 )
             else:
                 order = await self._exchange.create_limit_buy_order(
@@ -560,6 +560,16 @@ class ExecutionerAgent:
         candles: List[Dict],   # FIX #8: passed to Warden for structure BE
     ) -> None:
         """Check SL / TP / structure-BE on each candle close for open position."""
+        # ── CRITICAL: capture position data BEFORE Warden potentially closes it ──
+        pos = self._warden.get_position(symbol)
+        if pos is None:
+            return
+        saved_qty   = pos.quantity
+        saved_entry = pos.entry_price
+        saved_sl    = pos.stop_loss
+        saved_tp    = pos.take_profit
+        saved_strat = pos.strategy
+
         result = await self._warden.check_position(
             symbol=symbol,
             latest_close=candle["close"],
@@ -569,20 +579,18 @@ class ExecutionerAgent:
         )
 
         if result in ("SL", "TP"):
-            pos = self._warden.get_position(symbol)   # already removed if closed
-            exit_price  = candle["low"]  if result == "SL" else candle["high"]
-            # pos is None here because Warden already popped it; use candle prices
-            entry_price = 0.0            # we log approximate values
+            exit_price = saved_sl if result == "SL" else saved_tp
 
-            await self._execute_sell(symbol, exit_price)
+            await self._execute_sell(symbol, exit_price, quantity=saved_qty)
 
+            pnl_pct = (exit_price - saved_entry) / saved_entry * 100
             await self._notifier.send(
                 Notifier.trade_closed_msg(
                     symbol=symbol,
                     reason=result,
-                    entry=entry_price,
+                    entry=saved_entry,
                     exit_price=exit_price,
-                    pnl_pct=0.0,    # Warden already logged exact P&L
+                    pnl_pct=pnl_pct,
                 )
             )
 
@@ -596,13 +604,15 @@ class ExecutionerAgent:
                 )
 
     # ── Execute a limit sell ──────────────────────────────────────────────────
-    async def _execute_sell(self, symbol: str, exit_price: float) -> None:
+    async def _execute_sell(self, symbol: str, exit_price: float, quantity: float = 0.0) -> None:
         """
         Place a limit sell at the current bid price.
         Falls back to market sell if limit not filled within timeout.
         """
-        pos      = self._warden.get_position(symbol)
-        quantity = pos.quantity if pos else 0.0
+        if quantity <= 0:
+            # Fallback: try reading from warden (may still exist for manual sells)
+            pos = self._warden.get_position(symbol)
+            quantity = pos.quantity if pos else 0.0
 
         if quantity <= 0:
             log.warning("No quantity to sell for %s", symbol)
@@ -618,7 +628,7 @@ class ExecutionerAgent:
                 # Futures: close a LONG by placing SELL on same positionSide
                 order = await self._exchange.create_order(
                     symbol, "limit", "sell", qty_str, bid_str,
-                    params={"timeInForce": "GTC", "positionSide": "LONG"},
+                    params={"timeInForce": "GTC", "positionSide": "BOTH"},
                 )
             else:
                 order = await self._exchange.create_limit_sell_order(
@@ -651,7 +661,7 @@ class ExecutionerAgent:
                 if config.USE_FUTURES:
                     order = await self._exchange.create_order(
                         symbol, "market", "sell", qty_str,
-                        params={"positionSide": "LONG"},
+                        params={"positionSide": "BOTH"},
                     )
                 else:
                     order = await self._exchange.create_market_sell_order(

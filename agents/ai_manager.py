@@ -196,8 +196,9 @@ def build_proposal(
 
 _SYSTEM_PROMPT = """\
 You are a professional cryptocurrency risk manager reviewing trade proposals
-for an automated Binance Spot trading bot targeting high-volume, volatile coins
-(BTC, ETH, SOL, BNB etc.) for scalping and swing entries.
+for an automated Binance Futures trading bot targeting high-volume, volatile coins
+(BTC, ETH, SOL, BNB etc.) for scalping and swing entries. This is a leveraged
+futures account — leverage is applied to each trade (1–20×).
 
 Strategies Supported
 ────────────────────
