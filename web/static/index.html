@@ -833,7 +833,9 @@ function SettingsPanel({ tradeAllocationPct }) {
               transition: 'background 0.3s ease'
             }}
           >
+            {status === 'loading' ? 'Saving...' : status === 'success' ? '✓ Applied!' : 'Apply'}
           </button>
+
         </div>
         
         <hr style={{border: 'none', borderTop: '1px solid var(--border)', margin: '20px 0'}} />
