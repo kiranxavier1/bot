@@ -417,9 +417,12 @@ class ExecutionerAgent:
                 except Exception as lev_exc:
                     log.warning("Failed to set leverage for %s: %s", symbol, lev_exc)
 
+            # For Futures: leverage scales the notional exposure of our margin.
+            # e.g. 5% of $200 balance = $10 margin × 5x leverage = $50 position.
+            effective_leverage = leverage if config.USE_FUTURES else 1
             quantity = calculate_position_size(
-                balance_usdt=usdt_free, 
-                entry_price=ask_price, 
+                balance_usdt=usdt_free * effective_leverage,
+                entry_price=ask_price,
                 stop_loss=stop_loss,
             )
             if quantity <= 0:
