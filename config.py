@@ -94,7 +94,7 @@ CAPITAL_CONFIDENT = float(_optional("CAPITAL_CONFIDENT", "100.0"))
 CONFIDENCE_LEVEL  = 0.85     # threshold for high-stakes trade
 
 # Futures settings
-USE_FUTURES       = False     # Disabled due to Binance restricted IP limits
+USE_FUTURES       = True      # Enabled for AWS Static IP
 MAX_LEVERAGE      = 20        # Cap AI-selected leverage
 DEFAULT_LEVERAGE  = 5
 
