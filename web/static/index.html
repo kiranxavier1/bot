@@ -901,6 +901,26 @@ function SettingsPanel({ tradeAllocationPct }) {
           </button>
         </div>
 
+        <hr style={{border: 'none', borderTop: '1px solid var(--border)', margin: '20px 0'}} />
+        
+        <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
+          <div style={{flex: 1}}>
+            <div style={{fontWeight:600, fontSize:'14px', marginBottom:'10px'}}>System Code Updates (CI/CD)</div>
+            <div style={{color:'var(--muted)', fontSize:'12px'}}>Pulls the latest code from GitHub and gracefully reloads the Python backend instantly.</div>
+          </div>
+          <button 
+            onClick={handleUpdate} 
+            disabled={updateStatus === 'loading'} 
+            style={{
+              background: updateStatus === 'loading' ? 'var(--muted)' : (updateStatus === 'success' ? 'var(--green)' : 'var(--accent)'), 
+              color:'#fff', border:'none', padding:'12px 24px', borderRadius:'6px', fontWeight:600, cursor:'pointer', minWidth:'180px',
+              transition: 'background 0.3s ease'
+            }}
+          >
+            {updateStatus === 'loading' ? 'Updating & Restarting...' : updateStatus === 'success' ? '✓ Rebooting...' : '↓ Pull & Restart Bot'}
+          </button>
+        </div>
+
       </div>
     </div>
   );

@@ -48,7 +48,7 @@ HTF_SECONDARY_TF   = "1h"      # macro trend
 CANDLE_BUFFER_SIZE = 300       # bumped from 200 → 300 to support 1h EMA-200
 
 # Symbol discovery
-TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "25"))
+TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "40"))
 DISCOVERY_INTERVAL_SECS = 3600
 
 # ── AI / Gemini ───────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ TRENDLINE_MIN_SLOPE = float(_optional("TRENDLINE_MIN_SLOPE", "0.0002"))
 TRENDLINE_MAX_SLOPE = float(_optional("TRENDLINE_MAX_SLOPE", "0.005"))
 
 # FIX #1 — volume confirmation: confirmation candle must exceed N× avg volume
-VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "1.3"))
+VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "1.0"))
 VOLUME_LOOKBACK           = 20    # periods for average volume baseline
 
 # ── Risk management ───────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ MIN_RR_FALLBACK   = 3.0      # minimum R:R if no structural TP available
 BE_PIVOT_LOOKBACK = 10       # scan last N closed candles for post-entry pivot
 
 # Cooldown after SL hit
-COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", str(4 * 3600)))
+COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", str(1800)))
 
 # FIX #6 — portfolio-level daily loss circuit breaker
 MAX_DAILY_LOSS_PCT = float(_optional("MAX_DAILY_LOSS_PCT", "0.03"))  # halt at -3 %
@@ -137,7 +137,7 @@ VWAP_SESSION_CANDLES    = int(_optional("VWAP_SESSION_CANDLES", "96"))
 # Arm the VWAP watcher when price is within 0.3% of VWAP
 VWAP_PROXIMITY          = float(_optional("VWAP_PROXIMITY", "0.003"))
 # Volume confirmation for VWAP bounce (slightly lower than trendline bounce)
-VWAP_VOLUME_MULTIPLIER  = float(_optional("VWAP_VOLUME_MULTIPLIER", "1.2"))
+VWAP_VOLUME_MULTIPLIER  = float(_optional("VWAP_VOLUME_MULTIPLIER", "1.0"))
 
 # ── RSI Divergence strategy ───────────────────────────────────────────────────
 # Number of recent candles to scan for divergence patterns
