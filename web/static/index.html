@@ -849,7 +849,7 @@ function SettingsPanel({ tradeAllocationPct }) {
             onClick={handleUpdate} 
             disabled={updateStatus === 'loading'} 
             style={{
-              background: updateStatus === 'loading' ? 'var(--muted)' : (updateStatus === 'success' ? 'var(--green)' : 'var(--blue)'), 
+              background: updateStatus === 'loading' ? 'var(--muted)' : (updateStatus === 'success' ? 'var(--green)' : 'var(--accent)'), 
               color:'#fff', border:'none', padding:'12px 24px', borderRadius:'6px', fontWeight:600, cursor:'pointer', minWidth:'180px',
               transition: 'background 0.3s ease'
             }}
