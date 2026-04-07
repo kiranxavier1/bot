@@ -365,7 +365,18 @@ class ExecutionerAgent:
         try:
             # ── Fetch balance (FIX #6 seeds daily tracker) ───────────────────
             balance   = await self._exchange.fetch_balance()
-            usdt_free = float(balance.get("USDT", {}).get("free", 0.0))
+            if config.USE_FUTURES:
+                # Binance Futures balance is under assets list
+                usdt_free = 0.0
+                for asset in balance.get("info", {}).get("assets", []):
+                    if asset.get("asset") == "USDT":
+                        usdt_free = float(asset.get("availableBalance", 0.0))
+                        break
+                # Fallback to standard path if info not available
+                if usdt_free == 0.0:
+                    usdt_free = float(balance.get("USDT", {}).get("free", 0.0))
+            else:
+                usdt_free = float(balance.get("USDT", {}).get("free", 0.0))
             self._warden.daily_loss.set_start_balance(usdt_free)
             asyncio.create_task(bot_state.update_live_balance(usdt_free))
 
@@ -432,9 +443,16 @@ class ExecutionerAgent:
             )
 
             # ── Place order ───────────────────────────────────────────────────
-            order = await self._exchange.create_limit_buy_order(
-                symbol, quantity, limit_price
-            )
+            if config.USE_FUTURES:
+                # Futures: use create_order with 'positionSide'='BOTH' for one-way mode
+                order = await self._exchange.create_order(
+                    symbol, "limit", "buy", quantity, limit_price,
+                    params={"timeInForce": "GTC", "positionSide": "LONG"},
+                )
+            else:
+                order = await self._exchange.create_limit_buy_order(
+                    symbol, quantity, limit_price
+                )
             order_id = order["id"]
             log.info("Order placed: %s id=%s — waiting for fill...", symbol, order_id)
 
