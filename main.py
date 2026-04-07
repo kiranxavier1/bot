@@ -120,6 +120,33 @@ async def print_status_loop(warden: WardenAgent) -> None:
         )
 
 
+async def balance_refresh_loop(exchange: ccxtpro.Exchange) -> None:
+    """
+    Poll the real Binance account balance every 30 seconds and push it to the
+    dashboard.  This ensures manual trades, withdrawals, and deposits are
+    reflected in the UI without waiting for the bot to place its next order.
+    """
+    while True:
+        await asyncio.sleep(30)
+        try:
+            balance_data = await exchange.fetch_balance()
+            if config.USE_FUTURES:
+                usdt_free = 0.0
+                for asset in balance_data.get("info", {}).get("assets", []):
+                    if asset.get("asset") == "USDT":
+                        usdt_free = float(asset.get("availableBalance", 0.0))
+                        break
+                if usdt_free == 0.0:
+                    usdt_free = float(balance_data.get("USDT", {}).get("free", 0.0))
+            else:
+                usdt_free = float(balance_data.get("USDT", {}).get("free", 0.0))
+            await bot_state.update_live_balance(usdt_free)
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            log.warning("Balance refresh failed: %s", exc)
+
+
 async def main() -> None:
     # ── 1. Logging ────────────────────────────────────────────────────────────
     setup_logging()
@@ -213,10 +240,11 @@ async def main() -> None:
     # ── 7. Background tasks ───────────────────────────────────────────────────
     port = int(os.environ.get("PORT", 8000))
     tasks = [
-        asyncio.create_task(scout.run_discovery_loop(),          name="discovery"),
-        asyncio.create_task(btc_stream_loop(scout, registry), name="btc-1h"),
-        asyncio.create_task(print_status_loop(warden),           name="status"),
-        asyncio.create_task(run_server(host="0.0.0.0", port=port), name="web-ui"),
+        asyncio.create_task(scout.run_discovery_loop(),             name="discovery"),
+        asyncio.create_task(btc_stream_loop(scout, registry),       name="btc-1h"),
+        asyncio.create_task(print_status_loop(warden),              name="status"),
+        asyncio.create_task(balance_refresh_loop(exchange),         name="balance-refresh"),
+        asyncio.create_task(run_server(host="0.0.0.0", port=port),  name="web-ui"),
     ]
     if (r_task := retrainer.start()):
         tasks.append(r_task)
