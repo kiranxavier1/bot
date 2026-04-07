@@ -74,7 +74,7 @@ class BotState:
         # ── Live Trading ──────────────────────────────────────────────────────
         self.live_balance_usdt: float = 0.0
         self.live_pnl_usdt: float = 0.0
-        self.trade_allocation_pct: float = 5.0 # what % of capital to use per trade
+        self.trade_allocation_pct: float = config.TRADE_ALLOCATION_PCT  # % of balance per trade (set by dashboard slider)
 
         # Aggregate stats (recomputed on each trade close)
         self.stats: Dict[str, Any] = {
@@ -381,7 +381,7 @@ class BotState:
                 
                 self.live_balance_usdt     = data.get("live_balance_usdt", 0.0)
                 self.live_pnl_usdt         = data.get("live_pnl_usdt", 0.0)
-                self.trade_allocation_pct  = data.get("trade_allocation_pct", 5.0)
+                self.trade_allocation_pct  = data.get("trade_allocation_pct", config.TRADE_ALLOCATION_PCT)
                 
                 # Reconstruct deques
                 self._trades      = deque(data.get("trades", []),      maxlen=MAX_TRADES)

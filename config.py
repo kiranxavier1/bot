@@ -87,17 +87,20 @@ VOLUME_LOOKBACK           = 20    # periods for average volume baseline
 # ── Risk management ───────────────────────────────────────────────────────────
 RISK_PER_TRADE = float(_optional("RISK_PER_TRADE", "0.02"))  # 2 % of balance (legacy — kept for fallback)
 
-# Capital-based position sizing: deploy this amount (GBP/USDT) per trade.
-# User requested 100 for confident trades, 50 for regular.
-CAPITAL_REGULAR   = float(_optional("CAPITAL_REGULAR", "50.0"))
-CAPITAL_CONFIDENT = float(_optional("CAPITAL_CONFIDENT", "100.0"))
-CONFIDENCE_LEVEL  = 0.85     # threshold for high-stakes trade
+# Percentage-based position sizing — what % of the free balance to deploy per trade.
+# Overridden at runtime by the dashboard UI slider (bot_state.trade_allocation_pct).
+# Default 30 % means a $12 balance → ~$3.60 margin per trade at 1× leverage.
+TRADE_ALLOCATION_PCT = float(_optional("TRADE_ALLOCATION_PCT", "30.0"))  # 30 % of balance
 
 # Futures settings
 USE_FUTURES       = True      # Enabled for AWS Static IP
 MAX_LEVERAGE      = 20        # Cap AI-selected leverage
 DEFAULT_LEVERAGE  = 5
 
+
+# Minimum free balance (USDT) before the bot will open a new trade.
+# Set low enough to work with small balances like $12.
+MIN_TRADE_BALANCE = float(_optional("MIN_TRADE_BALANCE", "2.0"))  # $2 minimum
 
 # FIX #4 — ATR-based stop loss (replaces fixed % / candle-low)
 ATR_PERIOD     = 14

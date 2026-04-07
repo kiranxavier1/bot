@@ -380,10 +380,10 @@ class ExecutionerAgent:
             self._warden.daily_loss.set_start_balance(usdt_free)
             asyncio.create_task(bot_state.update_live_balance(usdt_free))
 
-            if usdt_free < 10:
+            if usdt_free < config.MIN_TRADE_BALANCE:
                 log.warning(
-                    "Insufficient USDT balance (%.2f) — skipping buy for %s",
-                    usdt_free, symbol,
+                    "Insufficient USDT balance (%.2f < %.2f MIN_TRADE_BALANCE) — skipping buy for %s",
+                    usdt_free, config.MIN_TRADE_BALANCE, symbol,
                 )
                 return
 
