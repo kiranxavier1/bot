@@ -48,7 +48,7 @@ HTF_SECONDARY_TF   = "1h"      # macro trend
 CANDLE_BUFFER_SIZE = 300       # bumped from 200 → 300 to support 1h EMA-200
 
 # Symbol discovery
-TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "50"))
+TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "25"))
 DISCOVERY_INTERVAL_SECS = 3600
 
 # ── AI / Gemini ───────────────────────────────────────────────────────────────
