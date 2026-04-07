@@ -611,9 +611,16 @@ class ExecutionerAgent:
             qty_str   = float(self._exchange.amount_to_precision(symbol, quantity))
             bid_str   = float(self._exchange.price_to_precision(symbol, bid_price))
 
-            order = await self._exchange.create_limit_sell_order(
-                symbol, qty_str, bid_str
-            )
+            if config.USE_FUTURES:
+                # Futures: close a LONG by placing SELL on same positionSide
+                order = await self._exchange.create_order(
+                    symbol, "limit", "sell", qty_str, bid_str,
+                    params={"timeInForce": "GTC", "positionSide": "LONG"},
+                )
+            else:
+                order = await self._exchange.create_limit_sell_order(
+                    symbol, qty_str, bid_str
+                )
             order_id = order["id"]
             log.info(
                 "📤 Limit Sell placed: %s qty=%.6g @ %.6g | id=%s",
@@ -638,9 +645,15 @@ class ExecutionerAgent:
                     symbol,
                 )
                 await self._exchange.cancel_order(order_id, symbol)
-                order = await self._exchange.create_market_sell_order(
-                    symbol, qty_str
-                )
+                if config.USE_FUTURES:
+                    order = await self._exchange.create_order(
+                        symbol, "market", "sell", qty_str,
+                        params={"positionSide": "LONG"},
+                    )
+                else:
+                    order = await self._exchange.create_market_sell_order(
+                        symbol, qty_str
+                    )
 
             filled = float(order.get("average") or order.get("price") or bid_price)
             log.info(

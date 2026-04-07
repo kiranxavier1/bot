@@ -161,7 +161,16 @@ async def main() -> None:
     # ── Fetch Initial Live Balance ───────────────────────────────────────────
     try:
         balance_data = await exchange.fetch_balance()
-        usdt_free = float(balance_data.get("USDT", {}).get("free", 0.0))
+        if config.USE_FUTURES:
+            usdt_free = 0.0
+            for asset in balance_data.get("info", {}).get("assets", []):
+                if asset.get("asset") == "USDT":
+                    usdt_free = float(asset.get("availableBalance", 0.0))
+                    break
+            if usdt_free == 0.0:
+                usdt_free = float(balance_data.get("USDT", {}).get("free", 0.0))
+        else:
+            usdt_free = float(balance_data.get("USDT", {}).get("free", 0.0))
         await bot_state.update_live_balance(usdt_free)
         log.info("Loaded real USDT balance: %.2f", usdt_free)
     except Exception as e:
