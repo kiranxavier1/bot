@@ -133,6 +133,37 @@ async def api_update_allocation(data: AllocationUpdate):
         return {"success": True, "trade_allocation_pct": bot_state.trade_allocation_pct}
     return JSONResponse(status_code=400, content={"error": "Percentage must be between 1 and 100"})
 
+class UpdatePayload(BaseModel):
+    action: str
+
+@app.post("/api/system/update")
+async def auto_update_bot(payload: UpdatePayload):
+    """
+    Executes a `git pull` to fetch the latest codebase changes,
+    and then immediately replaces the python process with a fresh boot to apply them.
+    """
+    import os
+    import sys
+    import subprocess
+    
+    if payload.action != "restart":
+        return JSONResponse(status_code=400, content={"error": "Invalid action"})
+
+    try:
+        log.info("📥 Executing git pull...")
+        # Run git pull synchronously
+        result = subprocess.run(["git", "pull"], capture_output=True, text=True, check=True)
+        log.info(f"Git Pull Result: {result.stdout}")
+        
+        # Give operations 1 second to breathe, execute the restart via background task
+        # We can't await it here because the server will die before returning the 200 OK.
+        log.warning("🔄 Process replacing itself for core update...")
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+        
+    except subprocess.CalledProcessError as e:
+        log.error(f"Git pull failed: {e.stderr}")
+        return JSONResponse(status_code=500, content={"error": "Git pull failed."})
+
 # ── WebSocket endpoint ────────────────────────────────────────────────────────
 
 @app.websocket("/ws")

@@ -398,9 +398,6 @@ class ExecutionerAgent:
             else:
                 take_profit = calculate_take_profit(ask_price, stop_loss)
             
-            # User request: £100 for confident, £50 for regular
-            stake_gbp = config.CAPITAL_CONFIDENT if confidence >= config.CONFIDENCE_LEVEL else config.CAPITAL_REGULAR
-
             # ── Futures Setup ────────────────────────────────────────────────
             if config.USE_FUTURES:
                 try:
@@ -413,7 +410,6 @@ class ExecutionerAgent:
                 balance_usdt=usdt_free, 
                 entry_price=ask_price, 
                 stop_loss=stop_loss,
-                fixed_stake=stake_gbp
             )
             if quantity <= 0:
                 log.warning("Zero quantity for %s — skipping", symbol)

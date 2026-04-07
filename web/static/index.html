@@ -768,6 +768,7 @@ function StrategyLearningPanel() {
 function SettingsPanel({ tradeAllocationPct }) {
   const [val, setVal] = useState(tradeAllocationPct || 5);
   const [status, setStatus] = useState('idle'); // idle, loading, success
+  const [updateStatus, setUpdateStatus] = useState('idle');
   
   useEffect(() => {
     if (tradeAllocationPct) setVal(tradeAllocationPct);
@@ -785,6 +786,21 @@ function SettingsPanel({ tradeAllocationPct }) {
       setTimeout(() => setStatus('idle'), 2000);
     } catch {
       setStatus('idle');
+    }
+  };
+
+  const handleUpdate = async () => {
+    try {
+      setUpdateStatus('loading');
+      await fetch('/api/system/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: "restart" })
+      });
+      setUpdateStatus('success');
+      setTimeout(() => setUpdateStatus('idle'), 3000);
+    } catch {
+      setUpdateStatus('idle');
     }
   };
 
@@ -817,9 +833,29 @@ function SettingsPanel({ tradeAllocationPct }) {
               transition: 'background 0.3s ease'
             }}
           >
-            {status === 'loading' ? 'Saving...' : status === 'success' ? '✓ Applied!' : 'Apply'}
           </button>
         </div>
+        
+        <hr style={{border: 'none', borderTop: '1px solid var(--border)', margin: '20px 0'}} />
+        
+        <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
+          <div style={{flex: 1}}>
+            <div style={{fontWeight:600, fontSize:'14px', marginBottom:'10px'}}>System Code Updates (CI/CD)</div>
+            <div style={{color:'var(--muted)', fontSize:'12px'}}>Pulls the latest code from GitHub and gracefully reloads the Python backend instantly.</div>
+          </div>
+          <button 
+            onClick={handleUpdate} 
+            disabled={updateStatus === 'loading'} 
+            style={{
+              background: updateStatus === 'loading' ? 'var(--muted)' : (updateStatus === 'success' ? 'var(--green)' : 'var(--blue)'), 
+              color:'#fff', border:'none', padding:'12px 24px', borderRadius:'6px', fontWeight:600, cursor:'pointer', minWidth:'180px',
+              transition: 'background 0.3s ease'
+            }}
+          >
+            {updateStatus === 'loading' ? 'Updating & Restarting...' : updateStatus === 'success' ? '✓ Rebooting...' : '↓ Pull & Restart Bot'}
+          </button>
+        </div>
+
       </div>
     </div>
   );

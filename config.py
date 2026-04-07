@@ -54,10 +54,10 @@ DISCOVERY_INTERVAL_SECS = 3600
 # ── AI / Gemini ───────────────────────────────────────────────────────────────
 GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3-flash-preview")
-# Lowered from 0.80 → 0.70: capture more good-risk opportunities across all 6 strategies.
+# Lowered from 0.80 → 0.60: capture more active scalp opportunities dynamically.
 # High-volatility coins need more entries, not fewer. The quality checklist and
 # continuous learning rules still protect against bad setups.
-MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.70"))
+MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.60"))
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = _require("TELEGRAM_BOT_TOKEN")
@@ -94,9 +94,10 @@ CAPITAL_CONFIDENT = float(_optional("CAPITAL_CONFIDENT", "100.0"))
 CONFIDENCE_LEVEL  = 0.85     # threshold for high-stakes trade
 
 # Futures settings
-USE_FUTURES       = True     # Enable futures trading
-MAX_LEVERAGE      = 20       # Cap AI-selected leverage
+USE_FUTURES       = False     # Disabled due to Binance restricted IP limits
+MAX_LEVERAGE      = 20        # Cap AI-selected leverage
 DEFAULT_LEVERAGE  = 5
+
 
 # FIX #4 — ATR-based stop loss (replaces fixed % / candle-low)
 ATR_PERIOD     = 14
