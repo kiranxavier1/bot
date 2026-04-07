@@ -150,6 +150,9 @@ class ScoutAgent:
             await self._bootstrap_symbol(sym)
             self._active_symbols.add(sym)
             log.info("Added symbol to pool: %s", sym)
+            # FIX #12: Prevent Binance WS 1008 Policy Violation (too many requests)
+            # by staggering the stream subscriptions across the pool.
+            await asyncio.sleep(1.0)
 
     # ── Bootstrap via REST ────────────────────────────────────────────────────
     async def _bootstrap_symbol(self, symbol: str) -> None:
