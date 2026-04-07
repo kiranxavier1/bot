@@ -151,16 +151,16 @@ def build_proposal(
             "1h_trend":  btc_sentiment,            # btc acts as a proxy for market trend
         },
         "quality_checklist": {
-            # Give Gemini a pre-computed quality scorecard
-            "ema200_ok":       htf_above_ema,
-            "adx_trending":    adx >= config.ADX_TREND_THRESHOLD,
-            "di_direction_ok": di_plus > di_minus,
-            "volume_ok":       vol_ratio >= config.VOLUME_CONFIRM_MULTIPLIER,
-            "touches_ok":      touch_count >= config.MIN_TRENDLINE_TOUCHES,
-            "rr_ok":           rr_ratio >= config.MIN_RR_FALLBACK,
-            "news_ok":         news_safe,
-            "btc_ok":          btc_sentiment in ("bullish", "neutral"),
-            "rsi_ok":          (rsi_val is not None and 40 <= rsi_val <= 70),
+            # Cast all to native Python bool — numpy.bool_ is NOT JSON serializable
+            "ema200_ok":       bool(htf_above_ema),
+            "adx_trending":    bool(adx >= config.ADX_TREND_THRESHOLD),
+            "di_direction_ok": bool(di_plus > di_minus),
+            "volume_ok":       bool(vol_ratio >= config.VOLUME_CONFIRM_MULTIPLIER),
+            "touches_ok":      bool(touch_count >= config.MIN_TRENDLINE_TOUCHES),
+            "rr_ok":           bool(rr_ratio >= config.MIN_RR_FALLBACK),
+            "news_ok":         bool(news_safe),
+            "btc_ok":          bool(btc_sentiment in ("bullish", "neutral")),
+            "rsi_ok":          bool(rsi_val is not None and 40 <= rsi_val <= 70),
         },
         "continuous_learning_rules": [], # Negative constraints from past losses
         "golden_setups": [],             # Positive patterns from past wins
