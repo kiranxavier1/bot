@@ -52,6 +52,9 @@ class Notifier:
         Returns True on success, False on failure.
         Messages longer than 4096 chars are automatically split.
         """
+        if not self._token or not self._chat_id:
+            return True
+            
         chunks = [text[i : i + 4096] for i in range(0, len(text), 4096)]
         ok = True
         for chunk in chunks:

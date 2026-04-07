@@ -60,8 +60,8 @@ GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3-flash-preview")
 MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.60"))
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
-TELEGRAM_BOT_TOKEN = _require("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID   = _require("TELEGRAM_CHAT_ID")
+TELEGRAM_BOT_TOKEN = _optional("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID   = _optional("TELEGRAM_CHAT_ID", "")
 
 # ── CryptoPanic (optional) ────────────────────────────────────────────────────
 CRYPTOPANIC_API_KEY = _optional("CRYPTOPANIC_API_KEY")
