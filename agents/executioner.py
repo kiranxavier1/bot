@@ -534,6 +534,40 @@ class ExecutionerAgent:
                 is_futures=config.USE_FUTURES,
             )
 
+            # ── FIX: Synchronize Live SL/TP orders on Binance ────────────────
+            # This ensures exits happen even if the 5m candle hasn't closed yet.
+            if config.USE_FUTURES:
+                try:
+                    sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
+                    tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
+
+                    # 1. Stop Loss Order
+                    log.info("🎯 Placing live STOP_MARKET on Binance at %s", sl_price)
+                    sl_order = await self._exchange.create_order(
+                        symbol, "STOP_MARKET", "sell", filled_qty,
+                        params={
+                            "stopPrice": sl_price,
+                            "reduceOnly": True,
+                            "positionSide": "BOTH"
+                        }
+                    )
+                    pos.sl_order_id = sl_order.get("id")
+
+                    # 2. Take Profit Order
+                    log.info("🎯 Placing live TAKE_PROFIT_MARKET on Binance at %s", tp_price)
+                    tp_order = await self._exchange.create_order(
+                        symbol, "TAKE_PROFIT_MARKET", "sell", filled_qty,
+                        params={
+                            "stopPrice": tp_price,
+                            "reduceOnly": True,
+                            "positionSide": "BOTH"
+                        }
+                    )
+                    pos.tp_order_id = tp_order.get("id")
+
+                except Exception as ex_sync:
+                    log.error("Failed to place exchange SL/TP for %s: %s", symbol, ex_sync)
+
             # ── Telegram notification ─────────────────────────────────────────
             await self._notifier.send(
                 Notifier.trade_opened_msg(
@@ -601,11 +635,40 @@ class ExecutionerAgent:
         elif result in ("TSL", "BE"):
             pos = self._warden.get_position(symbol)
             if pos:
+                # ── Sync TSL move to Binance ─────────────────────────────────
+                if config.USE_FUTURES and pos.sl_order_id:
+                    try:
+                        log.info("🔁 Syncing TSL move to Binance for %s", symbol)
+                        # Cancel old SL
+                        try:
+                            await self._exchange.cancel_order(pos.sl_order_id, symbol)
+                        except Exception as cancel_exc:
+                            log.warning("Could not cancel old SL %s: %s", pos.sl_order_id, cancel_exc)
+
+                        # Place new SL
+                        sl_price = float(self._exchange.price_to_precision(symbol, pos.stop_loss))
+                        new_sl_order = await self._exchange.create_order(
+                            symbol, "STOP_MARKET", "sell", pos.quantity,
+                            params={
+                                "stopPrice": sl_price,
+                                "reduceOnly": True,
+                                "positionSide": "BOTH"
+                            }
+                        )
+                        pos.sl_order_id = new_sl_order.get("id")
+                        log.info("✅ Binance SL updated to %s", sl_price)
+
+                    except Exception as sync_exc:
+                        log.error("Failed to sync TSL to Binance for %s: %s", symbol, sync_exc)
+
                 await self._notifier.send(
                     f"🔁 <b>SL trailed</b> for <code>{symbol}</code> — "
                     f"new SL: <code>{pos.stop_loss:.6g}</code> "
                     f"{'(Break-Even ✅)' if pos.be_activated else '(trailing 📈)'}"
                 )
+                asyncio.create_task(bot_state.push_breakeven_activated(
+                    symbol=symbol, new_sl=pos.stop_loss, sl_order_id=pos.sl_order_id
+                ))
 
     # ── Execute a limit sell ──────────────────────────────────────────────────
     async def _execute_sell(self, symbol: str, exit_price: float, quantity: float = 0.0) -> None:
@@ -677,6 +740,19 @@ class ExecutionerAgent:
                 "💰 Sell confirmed: %s qty=%.6g @ %.6g | id=%s",
                 symbol, qty_str, filled, order.get("id"),
             )
+
+            # ── Cleanup exchange SL/TP orders (FIX #12) ──────────────────────
+            # If the trade is closed, we must kill any remaining SL/TP orders on Binance.
+            pos = self._warden.get_position(symbol)
+            if pos:
+                for oid in [pos.sl_order_id, pos.tp_order_id]:
+                    if oid:
+                        try:
+                            log.info("🧹 Cleaning up ghost order on Binance: %s", oid)
+                            await self._exchange.cancel_order(oid, symbol)
+                        except Exception:
+                            # Usually means the order already filled or was already cancelled
+                            pass
 
         except Exception as exc:
             log.error(

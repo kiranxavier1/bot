@@ -58,6 +58,10 @@ class Position:
     # Tracks the highest close seen since entry — used for ATR trailing SL
     highest_close_since_entry: float = 0.0
 
+    # Exchange order IDs for synchronization
+    sl_order_id: Optional[str] = None
+    tp_order_id: Optional[str] = None
+
     @property
     def sl_pct(self) -> float:
         return abs(self.entry_price - self.stop_loss) / self.entry_price * 100
@@ -231,6 +235,28 @@ class WardenAgent:
         self._cooldowns: Dict[str, float]    = {}
         self._notifier                       = notifier
         self.daily_loss                      = DailyLossTracker()
+        
+        # Hydrate from persistent disk state
+        for sym, data in bot_state.positions.items():
+            try:
+                self._positions[sym] = Position(
+                    symbol=sym,
+                    entry_price=data.get("entry", 0.0),
+                    stop_loss=data.get("stop_loss", 0.0),
+                    take_profit=data.get("take_profit", 0.0),
+                    quantity=data.get("quantity", 0.0),
+                    strategy=data.get("strategy", "unknown"),
+                    leverage=data.get("leverage", 1),
+                    is_futures=data.get("is_futures", config.USE_FUTURES),
+                    entry_ts=data.get("opened_at", time.time()),
+                    be_activated=data.get("be_activated", False),
+                    highest_close_since_entry=data.get("entry", 0.0),
+                    sl_order_id=data.get("sl_order_id"),
+                    tp_order_id=data.get("tp_order_id"),
+                )
+                log.info("Rehydrated active position: %s from disk state", sym)
+            except Exception as e:
+                log.error("Failed to rehydrate position %s: %s", sym, e)
 
     # ── Circuit breaker ───────────────────────────────────────────────────────
     def is_circuit_breaker_hit(self) -> bool:
@@ -292,6 +318,8 @@ class WardenAgent:
             strategy=strategy,
             leverage=leverage,
             is_futures=is_futures,
+            sl_order_id=pos.sl_order_id,
+            tp_order_id=pos.tp_order_id,
         ))
         return pos
 

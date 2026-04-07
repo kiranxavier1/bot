@@ -142,6 +142,8 @@ class BotState:
                 "pnl_pct":      0.0,
                 "opened_at":    _now_iso(),
                 "be_activated": False,
+                "sl_order_id":  kwargs.get("sl_order_id"),
+                "tp_order_id":  kwargs.get("tp_order_id"),
             }
         await self._broadcast()
 
@@ -160,12 +162,14 @@ class BotState:
             self.live_balance_usdt = balance_usdt
         await self._broadcast()
 
-    async def push_breakeven_activated(self, symbol: str, new_sl: float) -> None:
+    async def push_breakeven_activated(self, symbol: str, new_sl: float, sl_order_id: str = None) -> None:
         async with self._lock:
             pos = self.positions.get(symbol)
             if pos:
                 pos["stop_loss"]    = new_sl
                 pos["be_activated"] = True
+                if sl_order_id:
+                    pos["sl_order_id"] = sl_order_id
         await self._broadcast()
 
     async def push_position_closed(

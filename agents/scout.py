@@ -195,9 +195,13 @@ class ScoutAgent:
                     continue
                 await buf.update(candles)
 
-                # Push scan event to state
+                # Push scan event to state and update live P&L for open positions tick-by-tick
+                latest_close = float(candles[-1][4])
                 asyncio.create_task(
-                    bot_state.push_scan_event(symbol, timeframe, float(candles[-1][4]))
+                    bot_state.push_scan_event(symbol, timeframe, latest_close)
+                )
+                asyncio.create_task(
+                    bot_state.push_price_update(symbol, latest_close)
                 )
 
                 # Detect candle close event
