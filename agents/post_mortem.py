@@ -264,14 +264,13 @@ Output ONLY valid JSON:
 }}"""
 
         try:
-            response = await self._client.aio.models.generate_content(
-                model=config.GEMINI_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self._system_instruction,
-                )
+            response = await self._client.messages.create(
+                model=config.ANTHROPIC_MODEL,
+                max_tokens=1000,
+                system=self._system_instruction,
+                messages=[{"role": "user", "content": prompt}]
             )
-            raw = response.text.strip()
+            raw = response.content[0].text.strip()
             if "```" in raw:
                 start = raw.find("{")
                 end = raw.rfind("}") + 1
@@ -337,14 +336,13 @@ Output ONLY valid JSON:
 }}"""
 
         try:
-            response = await self._client.aio.models.generate_content(
-                model=config.GEMINI_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self._system_instruction,
-                )
+            response = await self._client.messages.create(
+                model=config.ANTHROPIC_MODEL,
+                max_tokens=1000,
+                system=self._system_instruction,
+                messages=[{"role": "user", "content": prompt}]
             )
-            raw = response.text.strip()
+            raw = response.content[0].text.strip()
             if "```" in raw:
                 start = raw.find("{")
                 end = raw.rfind("}") + 1
