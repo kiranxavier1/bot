@@ -139,7 +139,15 @@ class ExecutionerAgent:
         if timeframe != config.SIGNAL_TIMEFRAME:
             return
 
-        # ── Session timing & weekend filters removed for high-frequency trading ───
+        # ── Session timing filter — active trading hours 06:00-20:00 UTC ───
+        if not is_prime_session():
+            log.debug("Outside prime session — skipping new entries for %s", symbol)
+            return
+
+        # ── Weekend filter — Sat/Sun have low volume & high false-positive rate ─
+        if not is_weekday():
+            log.debug("Weekend — skipping new entries for %s", symbol)
+            return
 
         # ── Cooldown guard ────────────────────────────────────────────────────
         if self._warden.is_on_cooldown(symbol):

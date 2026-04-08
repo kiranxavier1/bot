@@ -451,15 +451,14 @@ class MathematicianAgent:
             state.armed = False
 
         # ── Pre-compute shared win-rate filters ───────────────────────────────
-        # All filters forcefully bypassed to allow 1m high-frequency trading chaos
-        _rsi_ok     = True # rsi_above_midline(df)
-        _ema_stack  = True # is_ema_bullish_stack(df)
-        _above_vwap = True # price_above_vwap(df)
+        _rsi_ok     = rsi_above_midline(df)    # RSI-7 > 50
+        _ema_stack  = is_ema_bullish_stack(df) # EMA9 > EMA21 > EMA50
+        _above_vwap = price_above_vwap(df)     # price above VWAP
         _atr        = calc_atr(df)             # used for tight ATR-based TPs on scalps
 
-        _rsi_bear   = True # rsi_below_midline(df)
-        _ema_bear   = True # is_ema_bearish_stack(df)
-        _below_vwap = True # price_below_vwap(df)
+        _rsi_bear   = rsi_below_midline(df)
+        _ema_bear   = is_ema_bearish_stack(df)
+        _below_vwap = price_below_vwap(df)
 
         # ── Strategy 1: Trendline Bounce (SWING) ──────────────────────────────
         # Swing trade: use SWING_RR (2x) — wider TP suits the longer move.

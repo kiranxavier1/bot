@@ -38,11 +38,11 @@ BINANCE_API_SECRET = _require("BINANCE_API_SECRET")
 EXCHANGE_ID        = "binance"
 QUOTE_CURRENCY     = "USDT"
 
-# High-frequency 1m scalping
-TIMEFRAMES         = ["1m", "5m"]
-SIGNAL_TIMEFRAME   = "1m"      # core trading timeframe (all entries)
-ENTRY_TIMEFRAME    = "1m"      # precise entry confirmation candle
-HTF_FILTER_TF      = "5m"      # higher timeframe for trend context
+# Scalping + swing trading only — 5m signal, 15m HTF context. No 1h needed.
+TIMEFRAMES         = ["5m", "15m"]
+SIGNAL_TIMEFRAME   = "5m"      # core trading timeframe (all entries)
+ENTRY_TIMEFRAME    = "5m"      # precise entry confirmation candle
+HTF_FILTER_TF      = "15m"     # higher timeframe for trend context
 
 CANDLE_BUFFER_SIZE = 200       # 200 candles sufficient for 15m EMA-50
 
@@ -55,7 +55,7 @@ GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3-flash-preview")
 # 60%+ win rate mode: AI filters for quality, not just frequency.
 # Only high-conviction setups pass — this is the main win-rate lever.
-MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.35"))
+MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.52"))
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = _optional("TELEGRAM_BOT_TOKEN", "")
@@ -76,9 +76,9 @@ MIN_TRENDLINE_TOUCHES = 2
 TRENDLINE_MIN_SLOPE = float(_optional("TRENDLINE_MIN_SLOPE", "0.00005"))
 TRENDLINE_MAX_SLOPE = float(_optional("TRENDLINE_MAX_SLOPE", "0.015"))
 
-# Volume confirmation lowered to allow continuous trading
-VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "0.2"))
-VOLUME_LOOKBACK           = 10    # periods for average volume baseline
+# Volume confirmation: require at least average volume — filters low-conviction moves
+VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "1.0"))
+VOLUME_LOOKBACK           = 20    # periods for average volume baseline
 
 # ── Risk management ───────────────────────────────────────────────────────────
 RISK_PER_TRADE = float(_optional("RISK_PER_TRADE", "0.02"))  # 2 % of balance (legacy — kept for fallback)
@@ -146,12 +146,12 @@ HTF_EMA_PERIOD    = 50       # coin must be above 50-EMA on the 15m
 HTF_CANDLE_LIMIT  = 60       # how many 15m candles to fetch (15h window)
 
 # ── ADX directional filter ────────────────────────────────────────────────────
-# ADX ≥ 10 ensures there's some momentum, allowing highly active churning
-ADX_TREND_THRESHOLD = 10
-ADX_REQUIRE_DIRECTION = False
+# ADX ≥ 20 ensures there's real momentum — avoids choppy ranging markets
+ADX_TREND_THRESHOLD = 20
+ADX_REQUIRE_DIRECTION = True
 
 # ── VWAP Bounce strategy (scalping) ──────────────────────────────────────────
-# Rolling session: 288 × 1m = ~5 h 
+# Rolling session: 288 × 5m = 24 h
 VWAP_SESSION_CANDLES    = int(_optional("VWAP_SESSION_CANDLES", "288"))
 # Arm the VWAP watcher when price is within 0.4% of VWAP
 VWAP_PROXIMITY          = float(_optional("VWAP_PROXIMITY", "0.004"))
