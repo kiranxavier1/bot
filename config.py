@@ -52,7 +52,7 @@ DISCOVERY_INTERVAL_SECS = 3600
 
 # ── AI / Gemini ───────────────────────────────────────────────────────────────
 GEMINI_API_KEY = _require("GEMINI_API_KEY")
-GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3-flash-preview")
 # 60%+ win rate mode: AI filters for quality, not just frequency.
 # Only high-conviction setups pass — this is the main win-rate lever.
 MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.52"))
