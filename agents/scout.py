@@ -145,26 +145,34 @@ class ScoutAgent:
             self._active_symbols.discard(sym)
             log.info("Removed symbol from pool: %s", sym)
 
-        # Start added streams
-        for sym in to_add:
-            await self._bootstrap_symbol(sym)
-            self._active_symbols.add(sym)
-            log.info("Added symbol to pool: %s", sym)
-            # FIX #12: Prevent Binance WS 1008 Policy Violation (too many requests)
-            # by staggering the stream subscriptions across the pool.
-            await asyncio.sleep(1.0)
+        # Start added streams concurrently in chunks to avoid 160+ sec boot lag (Audit Fix)
+        if to_add:
+            log.info("Bootstrapping %d new symbols concurrently...", len(to_add))
+            to_add_list = list(to_add)
+            chunk_size = 5 # 5 pairs * 4 TFs = 20 concurrent REST calls per batch
+            for i in range(0, len(to_add_list), chunk_size):
+                chunk = to_add_list[i : i + chunk_size]
+                
+                # Gather REST calls for this chunk
+                await asyncio.gather(*(self._bootstrap_symbol(sym) for sym in chunk))
+                
+                for sym in chunk:
+                    self._active_symbols.add(sym)
+                    log.info("Added symbol to pool: %s", sym)
+                
+                # Stagger to respect Binance WS Policy Violation 1008
+                await asyncio.sleep(1.0)
 
     # ── Bootstrap via REST ────────────────────────────────────────────────────
     async def _bootstrap_symbol(self, symbol: str) -> None:
         """Fetch historical candles via REST and seed the buffer before WS."""
-        for tf in config.TIMEFRAMES:
+        async def _fetch_tf(tf: str):
             buf = self._registry.get_or_create(symbol, tf)
             try:
                 raw = await self._public_exchange.fetch_ohlcv(
                     symbol, tf, limit=config.CANDLE_BUFFER_SIZE
                 )
                 await buf.seed(raw)
-                log.debug("Seeded %s %s: %d candles", symbol, tf, len(raw))
             except Exception as exc:
                 log.warning("REST seed failed for %s %s: %s", symbol, tf, exc)
 
@@ -176,6 +184,8 @@ class ScoutAgent:
                     name=f"ws-{symbol}-{tf}",
                 )
                 self._stream_tasks[key] = task
+
+        await asyncio.gather(*(_fetch_tf(tf) for tf in config.TIMEFRAMES))
 
     # ── WebSocket Stream Loop ─────────────────────────────────────────────────
     async def _stream_loop(self, symbol: str, timeframe: str) -> None:

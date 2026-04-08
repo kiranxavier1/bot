@@ -224,97 +224,93 @@ class ExecutionerAgent:
         btc_dropping = btc_is_dropping(btc_df)
         btc_rising   = btc_is_rising(btc_df)
 
-        # ── PROACTIVE AI ANALYSIS ─────────────────────────────────────────────
-        # The AI receives the full market snapshot every candle (with detected
-        # patterns as hints) and decides whether to trade, in which direction,
-        # and sets its own SL/TP. No rigid pattern match required.
-        proactive_proposal = build_proactive_proposal(
-            symbol=symbol,
-            timeframe=timeframe,
-            market_snapshot=market_snapshot,
-            btc_df=btc_df,
-            strategy_signals=strategy_signals,
-        )
-        ai_decision = await self._ai.analyze_market(proactive_proposal)
+        # ── Concurrent position reservation (FIX #1) ──────────────────────────
+        if len(self._warden._positions) + len(self._pending_evaluations) >= config.MAX_CONCURRENT_POSITIONS:
+            return
 
-        if not self._ai.should_trade_proactive(ai_decision):
-            log.debug(
-                "🤖 Proactive AI PASS for %s (conf=%.2f) — %s",
-                symbol, ai_decision.get("confidence", 0.0),
-                ai_decision.get("reasoning", "")[:80],
+        self._pending_evaluations.add(symbol)
+        try:
+            # ── PROACTIVE AI ANALYSIS ─────────────────────────────────────────────
+            proactive_proposal = build_proactive_proposal(
+                symbol=symbol,
+                timeframe=timeframe,
+                market_snapshot=market_snapshot,
+                btc_df=btc_df,
+                strategy_signals=strategy_signals,
             )
-            return
+            ai_decision = await self._ai.analyze_market(proactive_proposal)
 
-        direction = ai_decision["direction"]   # "long" | "short"
-        log.info(
-            "🤖 Proactive AI TRADE: %s dir=%s conf=%.2f — %s",
-            symbol, direction, ai_decision.get("confidence", 0.0),
-            ai_decision.get("reasoning", "")[:100],
-        )
+            if not self._ai.should_trade_proactive(ai_decision):
+                log.debug(
+                    "🤖 Proactive AI PASS for %s (conf=%.2f) — %s",
+                    symbol, ai_decision.get("confidence", 0.0),
+                    ai_decision.get("reasoning", "")[:80],
+                )
+                return
 
-        # ── Apply hard macro/HTF safety filters to AI's direction ─────────────
-        # Removed hard blocks to allow AI full proactive autonomy.
-        if direction == "long":
-            if btc_dropping:
-                log.info("⚠️ BTC drop filter warning on AI LONG on %s (Bypassed)", symbol)
-            if not htf_above_ema:
-                log.info("⚠️ HTF EMA filter warning on AI LONG on %s (Bypassed)", symbol)
-        else:
-            if btc_rising:
-                log.info("⚠️ BTC rise filter warning on AI SHORT on %s (Bypassed)", symbol)
-            if not htf_below_ema:
-                log.info("⚠️ HTF EMA filter warning on AI SHORT on %s (Bypassed)", symbol)
-
-        # ── Max open positions guard ──────────────────────────────────────────
-        if len(self._warden._positions) >= config.MAX_CONCURRENT_POSITIONS:
-            log.info("❌ Max positions reached — skipping AI trade on %s", symbol)
-            return
-
-        # ── Validate and cap SL/TP from AI decision ───────────────────────────
-        entry_price = float(ai_decision["entry_price"])
-        raw_sl      = float(ai_decision["stop_loss"])
-        raw_tp      = float(ai_decision["take_profit"])
-
-        sl_pct = abs(entry_price - raw_sl) / entry_price * 100
-        if sl_pct > config.MAX_SL_PCT:
+            direction = ai_decision["direction"]
             log.info(
-                "❌ AI SL too wide for %s — SL=%.2f%% > MAX %.2f%%, skipping",
-                symbol, sl_pct, config.MAX_SL_PCT,
+                "🤖 Proactive AI TRADE: %s dir=%s conf=%.2f — %s",
+                symbol, direction, ai_decision.get("confidence", 0.0),
+                ai_decision.get("reasoning", "")[:100],
             )
-            return
 
-        rr = abs(raw_tp - entry_price) / abs(entry_price - raw_sl) if raw_sl != entry_price else 0.0
-        if rr < config.MIN_RR_FALLBACK:
-            log.info("❌ AI R:R too low for %s — R:R=%.2f < %.2f", symbol, rr, config.MIN_RR_FALLBACK)
-            return
+            if direction == "long":
+                if btc_dropping:
+                    log.info("⚠️ BTC drop filter warning on AI LONG on %s (Bypassed)", symbol)
+                if not htf_above_ema:
+                    log.info("⚠️ HTF EMA filter warning on AI LONG on %s (Bypassed)", symbol)
+            else:
+                if btc_rising:
+                    log.info("⚠️ BTC rise filter warning on AI SHORT on %s (Bypassed)", symbol)
+                if not htf_below_ema:
+                    log.info("⚠️ HTF EMA filter warning on AI SHORT on %s (Bypassed)", symbol)
 
-        # Use the best strategy name from detected patterns or AI's own label
-        strategy_name = ai_decision.get("strategy_used", "ai_proactive")
-        if strategy_signals:
-            strategy_name = strategy_signals[0]["strategy"]
+            # ── Validate and cap SL/TP from AI decision ───────────────────────────
+            entry_price = float(ai_decision["entry_price"])
+            raw_sl      = float(ai_decision["stop_loss"])
+            raw_tp      = float(ai_decision["take_profit"])
 
-        log.info(
-            "✅ Proactive AI approved %s [%s] entry=%.6g sl=%.6g tp=%.6g R:R=%.2f lev=%d×",
-            symbol, direction, entry_price, raw_sl, raw_tp, rr, ai_decision.get("leverage", 1),
-        )
+            sl_pct = abs(entry_price - raw_sl) / entry_price * 100
+            if sl_pct > config.MAX_SL_PCT:
+                log.info(
+                    "❌ AI SL too wide for %s — SL=%.2f%% > MAX %.2f%%, skipping",
+                    symbol, sl_pct, config.MAX_SL_PCT,
+                )
+                return
 
-        conf_candle = candles[-2] if len(candles) > 1 else candles[-1]
-        swing_tp    = None  # AI already set TP directly
+            rr = abs(raw_tp - entry_price) / abs(entry_price - raw_sl) if raw_sl != entry_price else 0.0
+            if rr < config.MIN_RR_FALLBACK:
+                log.info("❌ AI R:R too low for %s — R:R=%.2f < %.2f", symbol, rr, config.MIN_RR_FALLBACK)
+                return
 
-        await self._execute_limit_buy(
-            symbol=symbol,
-            conf_candle=conf_candle,
-            atr=atr,
-            swing_tp=swing_tp,
-            target_sl=raw_sl,
-            target_tp=raw_tp,
-            strategy=strategy_name,
-            direction=direction,
-            leverage=ai_decision.get("leverage", 1),
-            confidence=ai_decision.get("confidence", 0.0),
-            allocation_pct=ai_decision.get("allocation_pct", config.TRADE_ALLOCATION_PCT),
-        )
-        return
+            strategy_name = ai_decision.get("strategy_used", "ai_proactive")
+            if strategy_signals:
+                strategy_name = strategy_signals[0]["strategy"]
+
+            log.info(
+                "✅ Proactive AI approved %s [%s] entry=%.6g sl=%.6g tp=%.6g R:R=%.2f lev=%d×",
+                symbol, direction, entry_price, raw_sl, raw_tp, rr, ai_decision.get("leverage", 1),
+            )
+
+            conf_candle = candles[-2] if len(candles) > 1 else candles[-1]
+            swing_tp    = None  # AI already set TP directly
+
+            await self._execute_limit_buy(
+                symbol=symbol,
+                conf_candle=conf_candle,
+                atr=atr,
+                swing_tp=swing_tp,
+                target_sl=raw_sl,
+                target_tp=raw_tp,
+                strategy=strategy_name,
+                direction=direction,
+                leverage=ai_decision.get("leverage", 1),
+                confidence=ai_decision.get("confidence", 0.0),
+                allocation_pct=ai_decision.get("allocation_pct", config.TRADE_ALLOCATION_PCT),
+            )
+        finally:
+            self._pending_evaluations.discard(symbol)
 
     # ── FIX #9 — Limit buy with fill tracking ────────────────────────────────
     async def _execute_limit_buy(
@@ -451,9 +447,16 @@ class ExecutionerAgent:
             # ── Place order ───────────────────────────────────────────────────
             entry_side = "buy" if direction == "long" else "sell"
             if config.USE_FUTURES:
+                sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
+                tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
                 order = await self._exchange.create_order(
                     symbol, "limit", entry_side, quantity, limit_price,
-                    params={"timeInForce": "GTC", "positionSide": "BOTH"},
+                    params={
+                        "timeInForce": "GTC", 
+                        "positionSide": "BOTH",
+                        "stopLossPrice": sl_price,
+                        "takeProfitPrice": tp_price
+                    },
                 )
             else:
                 if entry_side == "buy":
@@ -546,41 +549,9 @@ class ExecutionerAgent:
                 direction=direction,
             )
 
-            # ── FIX: Synchronize Live SL/TP orders on Binance ────────────────
-            # This ensures exits happen even if the 5m candle hasn't closed yet.
-            if config.USE_FUTURES:
-                try:
-                    sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
-                    tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
-                    
-                    close_side = "sell" if direction == "long" else "buy"
-
-                    # 1. Stop Loss Order
-                    log.info("🎯 Placing live STOP_MARKET on Binance at %s", sl_price)
-                    sl_order = await self._exchange.create_order(
-                        symbol, "STOP_MARKET", close_side, filled_qty,
-                        params={
-                            "stopPrice": sl_price,
-                            "reduceOnly": True,
-                            "positionSide": "BOTH"
-                        }
-                    )
-                    pos.sl_order_id = sl_order.get("id")
-
-                    # 2. Take Profit Order
-                    log.info("🎯 Placing live TAKE_PROFIT_MARKET on Binance at %s", tp_price)
-                    tp_order = await self._exchange.create_order(
-                        symbol, "TAKE_PROFIT_MARKET", close_side, filled_qty,
-                        params={
-                            "stopPrice": tp_price,
-                            "reduceOnly": True,
-                            "positionSide": "BOTH"
-                        }
-                    )
-                    pos.tp_order_id = tp_order.get("id")
-
-                except Exception as ex_sync:
-                    log.error("Failed to place exchange SL/TP for %s: %s", symbol, ex_sync)
+            # SL/TP orders were implicitly embedded via ccxt Unified params!
+            # So we don't need secondary REST requests here anymore, saving us
+            # from Naked Position latency exposure correctly.
 
             # ── Telegram notification ─────────────────────────────────────────
             await self._notifier.send(
