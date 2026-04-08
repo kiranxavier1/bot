@@ -50,13 +50,12 @@ CANDLE_BUFFER_SIZE = 200       # 200 candles sufficient for 15m EMA-50
 TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "40"))
 DISCOVERY_INTERVAL_SECS = 3600
 
-# ── AI / Gemini ───────────────────────────────────────────────────────────────
-GEMINI_API_KEY = _require("GEMINI_API_KEY")
-GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3-flash-preview")
+# ── AI / Anthropic ────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL   = _optional("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
 # 60%+ win rate mode: AI filters for quality, not just frequency.
 # Only high-conviction setups pass — this is the main win-rate lever.
-MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.52"))
-
+MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.50")) 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = _optional("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = _optional("TELEGRAM_CHAT_ID", "")
@@ -132,13 +131,13 @@ BE_PIVOT_LOOKBACK = 10       # scan last N closed candles for post-entry pivot
 
 # Max SL distance as % of entry — prevents oversized losses on sudden volatility spikes.
 # If the computed SL is wider than this, the trade is skipped entirely.
-MAX_SL_PCT = float(_optional("MAX_SL_PCT", "0.8"))  # 0.8% max SL distance
+MAX_SL_PCT = float(_optional("MAX_SL_PCT", "3.0"))  # 3.0% max SL distance
 
 # Cooldown after SL hit — short cooldown for high-frequency scalping
-COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", "60"))
+COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", "1"))
 
-# FIX #6 — portfolio-level daily loss circuit breaker
-MAX_DAILY_LOSS_PCT = float(_optional("MAX_DAILY_LOSS_PCT", "0.03"))  # halt at -3 %
+# Portfolio-level daily loss circuit breaker
+MAX_DAILY_LOSS_PCT = float(_optional("MAX_DAILY_LOSS_PCT", "0.50"))  # halt at -50 %
 
 # ── Higher-timeframe trend filter ─────────────────────────────────────────────
 # 15m 50-EMA is the trend filter for scalp/swing — fast enough to be relevant on 5m

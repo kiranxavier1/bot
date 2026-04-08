@@ -253,20 +253,17 @@ class ExecutionerAgent:
         )
 
         # ── Apply hard macro/HTF safety filters to AI's direction ─────────────
+        # Removed hard blocks to allow AI full proactive autonomy.
         if direction == "long":
             if btc_dropping:
-                log.info("❌ BTC drop filter blocked AI LONG on %s", symbol)
-                return
+                log.info("⚠️ BTC drop filter warning on AI LONG on %s (Bypassed)", symbol)
             if not htf_above_ema:
-                log.info("❌ HTF EMA filter blocked AI LONG on %s — below 15m EMA-50", symbol)
-                return
+                log.info("⚠️ HTF EMA filter warning on AI LONG on %s (Bypassed)", symbol)
         else:
             if btc_rising:
-                log.info("❌ BTC rise filter blocked AI SHORT on %s", symbol)
-                return
+                log.info("⚠️ BTC rise filter warning on AI SHORT on %s (Bypassed)", symbol)
             if not htf_below_ema:
-                log.info("❌ HTF EMA filter blocked AI SHORT on %s — above 15m EMA-50", symbol)
-                return
+                log.info("⚠️ HTF EMA filter warning on AI SHORT on %s (Bypassed)", symbol)
 
         # ── Max open positions guard ──────────────────────────────────────────
         if len(self._warden._positions) >= config.MAX_CONCURRENT_POSITIONS:

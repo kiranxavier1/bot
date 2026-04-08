@@ -37,8 +37,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
-from google import genai
-from google.genai import types
+import anthropic
 
 import config
 from utils.indicators import btc_trend, market_regime, calc_rsi, fetch_news_sentiment
@@ -170,10 +169,10 @@ def build_proposal(
             "If a clear 5m trend (up or down) is happening, you should lean toward PROCEED. "
             "You MUST rigidly respect any active rules listed in continuous_learning_rules. "
             "You SHOULD prioritize setups that align with the golden_setups provided. "
-            "Select an appropriate leverage (1-20x) and trade allocation percentage (1.0-50.0) based on setup quality and volatility. "
+            "Select an appropriate leverage (1-20x) and trade allocation percentage (10.0-30.0) based on setup quality and volatility. "
             "Return ONLY valid JSON with keys: "
             "decision (PROCEED or REJECT), confidence (0.0–1.0), "
-            "leverage (int 1-20), allocation_pct (float 1.0-50.0), reasoning (string), risks (list of strings)."
+            "leverage (int 1-20), allocation_pct (float 10.0-30.0), reasoning (string), risks (list of strings)."
         ),
     }
     # Retrieve lessons for this strategy
@@ -222,15 +221,9 @@ def build_proactive_proposal(
     ]
 
     # Aggregate continuous-learning rules and golden setups across all strategies
-    all_strategies = [
-        "bounce", "breakout", "vwap_bounce", "ema_cross", "momentum_scalp",
-        "vwap_reject_short", "ema_cross_short", "momentum_short",
-    ]
-    all_rules: List[str] = []
-    all_setups: List[str] = []
-    for strat in all_strategies:
-        all_rules.extend(load_strategy_rules(strat))
-        all_setups.extend(load_strategy_golden_setups(strat))
+    # Aggregate continuous-learning rules and golden setups from global file
+    all_rules: List[str] = load_strategy_rules("global")
+    all_setups: List[str] = load_strategy_golden_setups("global")
 
     return {
         "symbol":                    symbol,
@@ -243,7 +236,8 @@ def build_proactive_proposal(
         "golden_setups":             all_setups[:6],
         "request": (
             "Analyze this market snapshot and decide whether to enter a trade RIGHT NOW. "
-            "You are the strategy engine — pick the best opportunity or PASS if truly ambiguous. "
+            "You are the strategy engine — pick the best opportunity. You MUST highly prioritize making a TRADE over PASS. "
+            "We want at minimum 1 trade every 5 minutes. DO NOT passively 'wait for a better setup' if the current one has positive expectancy."
             "Set entry_price, stop_loss, take_profit, leverage, allocation_pct when decision is TRADE."
         ),
     }
@@ -292,8 +286,8 @@ If R:R ≥ 2.0 and at least 2 technical confirmations align, you TRADE.
 ════════════════════════════════════════
  Decision rules
 ════════════════════════════════════════
-• TRADE: 2+ technical confirmations from the setups above AND R:R ≥ 2.0 AND news_safe is true
-• PASS:  ADX < 15 AND no momentum AND no pattern — truly directionless market
+• TRADE: 1+ technical confirmations from the setups above AND R:R ≥ 2.0 AND news_safe is true. Bias heavily toward TRADE over PASS.
+• PASS:  ONLY if ADX < 15 AND no momentum AND no pattern — truly directionless market. Do NOT PASS to "wait for better".
 • NEVER PASS just because it is not a "textbook" setup. A 60% setup with 2:1 R:R is TRADE.
 • You MUST respect any rule in continuous_learning_rules (these are hard constraints from past losses).
 • Golden setups in golden_setups should boost confidence by +0.15.
@@ -308,7 +302,7 @@ Respond ONLY with valid JSON (no markdown):
   "take_profit":    <float>,
   "confidence":     <float 0.0–1.0>,
   "leverage":       <int 1–20>,
-  "allocation_pct": <float 1.0–50.0>,
+  "allocation_pct": <float 10.0–30.0>,
   "strategy_used":  "<brief name: e.g. momentum_long, pullback_short, mean_reversion_long>",
   "reasoning":      "<1 concise sentence>",
   "risks":          ["<risk 1>"]
@@ -379,7 +373,7 @@ Respond ONLY with valid JSON, no markdown:
   "decision":   "PROCEED" or "REJECT",
   "confidence": <float 0.0–1.0>,
   "leverage":   <int 1–20>,
-  "allocation_pct": <float 1.0-50.0>,
+  "allocation_pct": <float 10.0-30.0>,
   "reasoning":  "<concise 1 sentence explanation>",
   "risks":      ["<risk 1>"]
 }
@@ -390,12 +384,11 @@ Respond ONLY with valid JSON, no markdown:
 
 class AIManager:
     """
-    Sends trade proposals to Gemini and returns a structured decision.
+    Sends trade proposals to Anthropic and returns a structured decision.
     """
 
     def __init__(self) -> None:
-        self._client = genai.Client(api_key=config.GEMINI_API_KEY)
-
+        self._client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
 
     async def evaluate(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -404,14 +397,13 @@ class AIManager:
         """
         user_msg = json.dumps(proposal, indent=2)
         try:
-            response = await self._client.aio.models.generate_content(
-                model=config.GEMINI_MODEL,
-                contents=user_msg,
-                config=types.GenerateContentConfig(
-                    system_instruction=_SYSTEM_PROMPT,
-                )
+            response = await self._client.messages.create(
+                model=config.ANTHROPIC_MODEL,
+                max_tokens=600,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_msg}]
             )
-            raw_text = response.text.strip()
+            raw_text = response.content[0].text.strip()
             decision = self._parse_decision(raw_text)
 
             log.info(
@@ -478,7 +470,7 @@ class AIManager:
             decision = "REJECT"
         confidence     = max(0.0, min(1.0, confidence))
         leverage       = max(1, min(config.MAX_LEVERAGE, leverage))
-        allocation_pct = max(1.0, min(100.0, allocation_pct))
+        allocation_pct = max(10.0, min(30.0, allocation_pct))
 
         return {
             "decision":       decision,
@@ -506,14 +498,13 @@ class AIManager:
         """
         user_msg = json.dumps(proposal, indent=2)
         try:
-            response = await self._client.aio.models.generate_content(
-                model=config.GEMINI_MODEL,
-                contents=user_msg,
-                config=types.GenerateContentConfig(
-                    system_instruction=_PROACTIVE_SYSTEM_PROMPT,
-                )
+            response = await self._client.messages.create(
+                model=config.ANTHROPIC_MODEL,
+                max_tokens=600,
+                system=_PROACTIVE_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_msg}]
             )
-            raw_text = response.text.strip()
+            raw_text = response.content[0].text.strip()
             decision = self._parse_proactive_decision(raw_text)
 
             log.info(
@@ -577,7 +568,7 @@ class AIManager:
             direction = "long"
         confidence = max(0.0, min(1.0, confidence))
         leverage   = max(1, min(config.MAX_LEVERAGE, leverage))
-        alloc_pct  = max(1.0, min(100.0, alloc_pct))
+        alloc_pct  = max(10.0, min(30.0, alloc_pct))
 
         return {
             "decision":       decision,

@@ -6,8 +6,7 @@ import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from google import genai
-from google.genai import types
+import anthropic
 import config
 
 from web.state import bot_state
@@ -42,16 +41,16 @@ def _trade_id(trade: Dict) -> str:
 
 # ── Strategy file operations ─────────────────────────────────────────────────
 
-def _strategy_path(strategy: str) -> str:
-    return os.path.join(_STRATEGIES_DIR, f"{strategy}.json")
+def _strategy_path() -> str:
+    return os.path.join(_STRATEGIES_DIR, "global_learning.json")
 
 
-def _load_strategy_file(strategy: str) -> Dict[str, Any]:
-    """Load a strategy's learning file, creating one if it doesn't exist."""
-    if strategy in _STRATEGY_CACHE:
-        return _STRATEGY_CACHE[strategy]
+def _load_strategy_file(strategy_ignored: str = "") -> Dict[str, Any]:
+    """Load the unified global learning file, creating one if it doesn't exist."""
+    if "global" in _STRATEGY_CACHE:
+        return _STRATEGY_CACHE["global"]
         
-    path = _strategy_path(strategy)
+    path = _strategy_path()
     data = None
     if os.path.exists(path):
         try:
@@ -62,23 +61,23 @@ def _load_strategy_file(strategy: str) -> Dict[str, Any]:
             
     if not data:
         data = {
-            "strategy":              strategy,
+            "strategy":              "global",
             "rules":                 [],
-            "golden_setups":         [],  # v3: Positive reinforcement patterns
+            "golden_setups":         [],
             "total_losses_analyzed": 0,
-            "total_wins_analyzed":   0,   # v3
+            "total_wins_analyzed":   0,
             "last_updated":          None,
             "evolution_log":         [],
         }
         
-    _STRATEGY_CACHE[strategy] = data
+    _STRATEGY_CACHE["global"] = data
     return data
 
 
-def _save_strategy_file(strategy: str, data: Dict[str, Any]):
-    _STRATEGY_CACHE[strategy] = data
+def _save_strategy_file(strategy_ignored: str, data: Dict[str, Any]):
+    _STRATEGY_CACHE["global"] = data
     _ensure_dirs()
-    path = _strategy_path(strategy)
+    path = _strategy_path()
     with open(path, 'w') as f:
         json.dump(data, f, indent=2)
 
@@ -140,21 +139,17 @@ def load_strategy_data(strategy: str) -> Dict[str, Any]:
 
 
 def list_all_strategies() -> List[Dict[str, Any]]:
-    """Return summary info for all strategies."""
+    """Return summary info for the unified global strategy."""
     _ensure_dirs()
-    all_strategies = ["bounce", "breakout", "vwap_bounce", "ema_cross", "momentum_scalp"]
-    result = []
-    for strat in all_strategies:
-        data = _load_strategy_file(strat)
-        result.append({
-            "strategy":     strat,
-            "rule_count":   len(data.get("rules", [])),
-            "golden_count": len(data.get("golden_setups", [])),
-            "losses_analyzed": data.get("total_losses_analyzed", 0),
-            "wins_analyzed":   data.get("total_wins_analyzed", 0),
-            "last_updated": data.get("last_updated"),
-        })
-    return result
+    data = _load_strategy_file()
+    return [{
+        "strategy":     "global_learning",
+        "rule_count":   len(data.get("rules", [])),
+        "golden_count": len(data.get("golden_setups", [])),
+        "losses_analyzed": data.get("total_losses_analyzed", 0),
+        "wins_analyzed":   data.get("total_wins_analyzed", 0),
+        "last_updated": data.get("last_updated"),
+    }]
 
 
 def clear_all_strategy_rules() -> None:
@@ -163,26 +158,25 @@ def clear_all_strategy_rules() -> None:
     global _STRATEGY_CACHE
     _STRATEGY_CACHE.clear()
     
-    all_strategies = ["bounce", "breakout", "vwap_bounce", "ema_cross", "momentum_scalp"]
-    for strat in all_strategies:
-        path = _strategy_path(strat)
-        if os.path.exists(path):
-            try:
-                os.remove(path)
-            except Exception as e:
-                log.error("Failed to delete strategy file %s: %s", path, e)
+    path = _strategy_path()
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except Exception as e:
+            log.error("Failed to delete strategy file %s: %s", path, e)
 
 
 # ── RetrainingAgent ──────────────────────────────────────────────────────────
 
 class RetrainingAgent:
     """
-    AI Evaluator Agent — consumes losing trades, produces deep analysis,
-    and evolves strategy rule files in real time.
+    Subscribes to bot_state.closed_trades_queue.
+    Passes closed trades to Anthropic AI for asynchronous post-mortem analysis.
+    Evolves rules inside the unified global learning file.
     """
 
-    def __init__(self, exchange=None):
-        self._client = genai.Client(api_key=config.GEMINI_API_KEY)
+    def __init__(self, exchange=None) -> None:
+        self._client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
         self._system_instruction = (
             "You are a quantitative trading analyst. You analyze trades (wins and losses) "
             "and produce structured JSON reports. Be specific and actionable. "
