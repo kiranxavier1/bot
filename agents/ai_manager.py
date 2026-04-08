@@ -176,9 +176,9 @@ def build_proposal(
             "leverage (int 1-20), allocation_pct (float 1.0-50.0), reasoning (string), risks (list of strings)."
         ),
     }
-    # Retrieve lessons for this strategy
+    # Retrieve lessons for this strategy (bypassing negative constraints for HF scalping)
     from agents.post_mortem import load_strategy_rules, load_strategy_golden_setups, load_strategy_data
-    proposal["continuous_learning_rules"] = load_strategy_rules(strategy)
+    proposal["continuous_learning_rules"] = [] # Bypassed to allow tight 1m SLs
     proposal["golden_setups"] = load_strategy_golden_setups(strategy)
     
     # Add strategy performance metadata
@@ -227,12 +227,11 @@ Evaluation — lean heavily toward PROCEED
 Hard rules (REJECT only for these)
 ────────────────────────────────────
 1. News: REJECT if news_safe is false.
-2. Continuous learning: REJECT if a rule in continuous_learning_rules explicitly forbids this exact setup.
-3. R:R < 2.5: REJECT any setup where reward_risk < 2.5 — below our minimum expectancy threshold.
-4. DI- > DI+: REJECT if the market is clearly moving against the long direction.
+2. Negative Expectancy: REJECT if reward_risk < 1.0 (Profit target is less than stop loss distance).
+3. Critical Alignment: REJECT only if DI alignment completely opposes the trend AND ADX > 25.
 
-Everything else → PROCEED. Do not invent reasons to REJECT. A setup passing the 4 checks above
-should be approved. We have 3–4× R:R built in, so even a 30% win rate is profitable.
+Everything else → PROCEED. Do not invent reasons to REJECT. A setup passing basic checks
+should be approved. We are doing high frequency scalping, so let setups through if R:R is > 1.0.
 
 BTC context: only reject on "bearish" BTC if R:R < 3.0. If R:R ≥ 3.0, proceed regardless.
 
