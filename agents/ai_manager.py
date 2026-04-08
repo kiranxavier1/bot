@@ -449,7 +449,8 @@ class AIManager:
         if "```" in text:
             start = text.find("{")
             end   = text.rfind("}") + 1
-            text  = text[start:end]
+            if start != -1 and end > start:
+                text = text[start:end]
 
         try:
             data = json.loads(text)
@@ -541,7 +542,7 @@ class AIManager:
                 "decision":   "PASS",
                 "confidence": 0.0,
                 "reasoning":  f"API error: {exc}",
-                "risks":      ["Anthropic API unavailable"],
+                "risks":      ["Gemini API unavailable"],
             }
 
     async def evaluate_observer(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
@@ -563,7 +564,11 @@ class AIManager:
             if "```" in raw_text:
                 start = raw_text.find("{")
                 end   = raw_text.rfind("}") + 1
-                raw_text  = raw_text[start:end]
+                if start != -1 and end > start:
+                    raw_text = raw_text[start:end]
+                
+            if not raw_text.strip():
+                return {}
                 
             return json.loads(raw_text)
         except Exception as exc:
@@ -576,7 +581,8 @@ class AIManager:
         if "```" in text:
             start = text.find("{")
             end   = text.rfind("}") + 1
-            text  = text[start:end]
+            if start != -1 and end > start:
+                text = text[start:end]
 
         try:
             data = json.loads(text)

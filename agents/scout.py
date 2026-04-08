@@ -149,7 +149,7 @@ class ScoutAgent:
         if to_add:
             log.info("Bootstrapping %d new symbols concurrently...", len(to_add))
             to_add_list = list(to_add)
-            chunk_size = 5 # 5 pairs * 4 TFs = 20 concurrent REST calls per batch
+            chunk_size = 2 # 2 pairs * 2 TFs = 4 concurrent subscriptions per batch < 5 sub limit
             for i in range(0, len(to_add_list), chunk_size):
                 chunk = to_add_list[i : i + chunk_size]
                 

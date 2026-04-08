@@ -277,7 +277,8 @@ Output ONLY valid JSON:
             if "```" in raw:
                 start = raw.find("{")
                 end = raw.rfind("}") + 1
-                raw = raw[start:end]
+                if start != -1 and end > start:
+                    raw = raw[start:end]
 
             analysis = json.loads(raw)
             full_analysis = {
@@ -351,7 +352,8 @@ Output ONLY valid JSON:
             if "```" in raw:
                 start = raw.find("{")
                 end = raw.rfind("}") + 1
-                raw = raw[start:end]
+                if start != -1 and end > start:
+                    raw = raw[start:end]
 
             analysis = json.loads(raw)
             full_analysis = {
