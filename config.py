@@ -50,9 +50,9 @@ CANDLE_BUFFER_SIZE = 200       # 200 candles sufficient for 15m EMA-50
 TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "40"))
 DISCOVERY_INTERVAL_SECS = 3600
 
-# ── AI / Anthropic ────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
-ANTHROPIC_MODEL   = _optional("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+# ── AI / Gemini ────────────────────────────────────────────────────────────
+GEMINI_API_KEY = _require("GEMINI_API_KEY")
+GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3.1-pro-preview")
 # 60%+ win rate mode: AI filters for quality, not just frequency.
 # Only high-conviction setups pass — this is the main win-rate lever.
 MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.50")) 

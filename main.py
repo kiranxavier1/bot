@@ -154,7 +154,7 @@ async def main() -> None:
     log.info("=" * 60)
     log.info("  3rd Touch Trendline Bot — starting up")
     log.info("  Exchange  : Binance %s", "Futures" if config.USE_FUTURES else "Spot")
-    log.info("  AI Model  : %s", config.ANTHROPIC_MODEL)
+    log.info("  AI Model  : %s", config.GEMINI_MODEL)
     log.info("  Top pairs : %d", config.TOP_N_PAIRS)
     log.info("  Timeframes: %s", config.TIMEFRAMES)
     log.info("=" * 60)

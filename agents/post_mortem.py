@@ -6,7 +6,8 @@ import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-import anthropic
+from google import genai
+from google.genai import types
 import config
 
 from web.state import bot_state
@@ -176,7 +177,7 @@ class RetrainingAgent:
     """
 
     def __init__(self, exchange=None) -> None:
-        self._client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+        self._client = genai.Client(api_key=config.GEMINI_API_KEY)
         self._system_instruction = (
             "You are a quantitative trading analyst. You analyze trades (wins and losses) "
             "and produce structured JSON reports. Be specific and actionable. "
@@ -264,13 +265,15 @@ Output ONLY valid JSON:
 }}"""
 
         try:
-            response = await self._client.messages.create(
-                model=config.ANTHROPIC_MODEL,
-                max_tokens=1000,
-                system=self._system_instruction,
-                messages=[{"role": "user", "content": prompt}]
+            response = await self._client.aio.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=self._system_instruction,
+                    max_output_tokens=1000,
+                )
             )
-            raw = response.content[0].text.strip()
+            raw = response.text.strip()
             if "```" in raw:
                 start = raw.find("{")
                 end = raw.rfind("}") + 1
@@ -336,13 +339,15 @@ Output ONLY valid JSON:
 }}"""
 
         try:
-            response = await self._client.messages.create(
-                model=config.ANTHROPIC_MODEL,
-                max_tokens=1000,
-                system=self._system_instruction,
-                messages=[{"role": "user", "content": prompt}]
+            response = await self._client.aio.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=self._system_instruction,
+                    max_output_tokens=1000,
+                )
             )
-            raw = response.content[0].text.strip()
+            raw = response.text.strip()
             if "```" in raw:
                 start = raw.find("{")
                 end = raw.rfind("}") + 1

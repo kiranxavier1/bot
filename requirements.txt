@@ -3,7 +3,7 @@ ccxt[pro]>=4.3.0            # CCXT Pro for WebSocket + REST exchange access
 aiohttp>=3.9.0              # Async HTTP (used internally by ccxt.pro)
 
 # AI / LLM
-anthropic>=0.30.0             # Anthropic AI SDK (for Claude)
+google-genai>=0.3.0           # Google GenAI SDK (for Gemini 3.1)
 
 # Technical analysis
 pandas>=2.1.0               # DataFrame manipulation for candle data

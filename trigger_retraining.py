@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # Mock environment for config if needed
     os.environ.setdefault("BINANCE_API_KEY", "1")
     os.environ.setdefault("BINANCE_API_SECRET", "1")
-    os.environ.setdefault("ANTHROPIC_API_KEY", "1") # Use a real one if testing AI call
+    os.environ.setdefault("GEMINI_API_KEY", "1") # Use a real one if testing AI call
     os.environ.setdefault("TELEGRAM_BOT_TOKEN", "1")
     os.environ.setdefault("TELEGRAM_CHAT_ID", "1")
     

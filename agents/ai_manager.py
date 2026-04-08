@@ -37,7 +37,8 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
-import anthropic
+from google import genai
+from google.genai import types
 
 import config
 from utils.indicators import btc_trend, market_regime, calc_rsi, fetch_news_sentiment
@@ -390,7 +391,7 @@ class AIManager:
     """
 
     def __init__(self) -> None:
-        self._client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+        self._client = genai.Client(api_key=config.GEMINI_API_KEY)
 
     async def evaluate(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -399,13 +400,15 @@ class AIManager:
         """
         user_msg = json.dumps(proposal, indent=2)
         try:
-            response = await self._client.messages.create(
-                model=config.ANTHROPIC_MODEL,
-                max_tokens=600,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}]
+            response = await self._client.aio.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=user_msg,
+                config=types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_PROMPT,
+                    max_output_tokens=600,
+                )
             )
-            raw_text = response.content[0].text.strip()
+            raw_text = response.text.strip()
             decision = self._parse_decision(raw_text)
 
             log.info(
@@ -500,13 +503,15 @@ class AIManager:
         """
         user_msg = json.dumps(proposal, indent=2)
         try:
-            response = await self._client.messages.create(
-                model=config.ANTHROPIC_MODEL,
-                max_tokens=600,
-                system=_PROACTIVE_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}]
+            response = await self._client.aio.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=user_msg,
+                config=types.GenerateContentConfig(
+                    system_instruction=_PROACTIVE_SYSTEM_PROMPT,
+                    max_output_tokens=600,
+                )
             )
-            raw_text = response.content[0].text.strip()
+            raw_text = response.text.strip()
             decision = self._parse_proactive_decision(raw_text)
 
             log.info(
@@ -545,13 +550,15 @@ class AIManager:
         Expected to return a JSON dict overriding config and setting macro directives.
         """
         try:
-            response = await self._client.messages.create(
-                model=config.ANTHROPIC_MODEL,
-                max_tokens=800,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}]
+            response = await self._client.aio.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    max_output_tokens=800,
+                )
             )
-            raw_text = response.content[0].text.strip()
+            raw_text = response.text.strip()
             
             if "```" in raw_text:
                 start = raw_text.find("{")
