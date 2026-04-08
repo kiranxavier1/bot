@@ -142,7 +142,7 @@ def load_strategy_data(strategy: str) -> Dict[str, Any]:
 def list_all_strategies() -> List[Dict[str, Any]]:
     """Return summary info for all strategies."""
     _ensure_dirs()
-    all_strategies = ["bounce", "mean_reversion", "fvg", "breakout", "vwap_bounce", "rsi_divergence"]
+    all_strategies = ["bounce", "breakout", "vwap_bounce", "ema_cross", "momentum_scalp"]
     result = []
     for strat in all_strategies:
         data = _load_strategy_file(strat)

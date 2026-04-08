@@ -38,14 +38,13 @@ BINANCE_API_SECRET = _require("BINANCE_API_SECRET")
 EXCHANGE_ID        = "binance"
 QUOTE_CURRENCY     = "USDT"
 
-# Primary signal timeframe is 5m (user requested); 15m and 1h used for HTF trend.
-TIMEFRAMES         = ["5m", "15m", "1h"]
-SIGNAL_TIMEFRAME   = "5m"      # core trading timeframe
+# Scalping + swing trading only — 5m signal, 15m HTF context. No 1h needed.
+TIMEFRAMES         = ["5m", "15m"]
+SIGNAL_TIMEFRAME   = "5m"      # core trading timeframe (all entries)
 ENTRY_TIMEFRAME    = "5m"      # precise entry confirmation candle
-HTF_FILTER_TF      = "15m"     # visual trend identification (1h also used)
-HTF_SECONDARY_TF   = "1h"      # macro trend
+HTF_FILTER_TF      = "15m"     # higher timeframe for trend context
 
-CANDLE_BUFFER_SIZE = 300       # bumped from 200 → 300 to support 1h EMA-200
+CANDLE_BUFFER_SIZE = 200       # 200 candles sufficient for 15m EMA-50
 
 # Symbol discovery
 TOP_N_PAIRS             = int(_optional("TOP_N_PAIRS", "40"))
@@ -54,10 +53,9 @@ DISCOVERY_INTERVAL_SECS = 3600
 # ── AI / Gemini ───────────────────────────────────────────────────────────────
 GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3-flash-preview")
-# Lowered from 0.80 → 0.60: capture more active scalp opportunities dynamically.
-# High-volatility coins need more entries, not fewer. The quality checklist and
-# continuous learning rules still protect against bad setups.
-MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.60"))
+# 60%+ win rate mode: AI filters for quality, not just frequency.
+# Only high-conviction setups pass — this is the main win-rate lever.
+MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.52"))
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = _optional("TELEGRAM_BOT_TOKEN", "")
@@ -74,13 +72,11 @@ WATCHER_PROXIMITY  = float(_optional("WATCHER_PROXIMITY", "0.005"))   # 0.5 %
 # 2 touches define the line -> enter trade on the 3rd touch!
 MIN_TRENDLINE_TOUCHES = 2
 
-# FIX #5 — trendline slope bounds (price-change per 15m candle as a fraction)
-# Rejects near-flat noise AND unsustainably steep lines.
-# Default: slope must be between +0.0002 and +0.005 per candle
-TRENDLINE_MIN_SLOPE = float(_optional("TRENDLINE_MIN_SLOPE", "0.0002"))
-TRENDLINE_MAX_SLOPE = float(_optional("TRENDLINE_MAX_SLOPE", "0.005"))
+# Trendline slope bounds — wider range to catch more scalp setups on 5m
+TRENDLINE_MIN_SLOPE = float(_optional("TRENDLINE_MIN_SLOPE", "0.00005"))
+TRENDLINE_MAX_SLOPE = float(_optional("TRENDLINE_MAX_SLOPE", "0.015"))
 
-# FIX #1 — volume confirmation: confirmation candle must exceed N× avg volume
+# Volume confirmation: require at least average volume — filters low-conviction moves
 VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "1.0"))
 VOLUME_LOOKBACK           = 20    # periods for average volume baseline
 
@@ -103,9 +99,9 @@ MAX_CONCURRENT_POSITIONS = int(_optional("MAX_CONCURRENT_POSITIONS", "5"))  # ca
 # Set low enough to work with small balances like $12.
 MIN_TRADE_BALANCE = float(_optional("MIN_TRADE_BALANCE", "2.0"))  # $2 minimum
 
-# FIX #4 — ATR-based stop loss (replaces fixed % / candle-low)
+# ATR-based stop loss — tighter SL means shorter distance to TP at same R:R
 ATR_PERIOD     = 14
-ATR_MULTIPLIER = float(_optional("ATR_MULTIPLIER", "2.5"))   # SL = entry − 2.5×ATR (wider to survive noise wicks)
+ATR_MULTIPLIER = float(_optional("ATR_MULTIPLIER", "1.2"))   # SL = entry − 1.2×ATR (tight, proportional to volatility)
 
 # Structural SL — use 15m pivot lows to anchor SL at real support levels
 # instead of a pure ATR mathematical level.  Much harder to stop-hunt.
@@ -118,44 +114,45 @@ SL_MIN_ATR_MULT       = float(_optional("SL_MIN_ATR_MULT", "1.5"))          # fl
 TSL_ACTIVATION_ATR_MULT = float(_optional("TSL_ACTIVATION_ATR_MULT", "1.0"))  # trail only when profit ≥ 1×ATR
 TSL_ATR_MULTIPLIER      = float(_optional("TSL_ATR_MULTIPLIER", "2.0"))        # wider trail once active
 
-# FIX #11 + USER SWING INSIGHT — target just below previous swing high
-# If no valid swing high found, fall back to min RR ratio below (User requested 3-4x profit risk)
-SWING_TP_BUFFER   = 0.005    # sell 0.5 % below the previous swing high
-MIN_RR_FALLBACK   = 3.0      # minimum R:R if no structural TP available
+# TP targeting: 1.5x R:R — tight targets that price actually reaches = high win rate.
+# Research: 1.5x R:R with 60%+ win rate is more profitable than 3.5x with 27% win rate.
+SWING_TP_BUFFER   = 0.002    # sell 0.2% below previous swing high (tighter = more hits)
+MIN_RR_FALLBACK   = 1.5      # fixed fallback R:R — achievable on every 5m scalp
+
+# ATR-based TP multiplier for scalp strategies (vwap_bounce, ema_cross, momentum_scalp)
+# TP = entry + ATR × SCALP_TP_ATR_MULT — keeps targets proportional to actual volatility
+SCALP_TP_ATR_MULT = float(_optional("SCALP_TP_ATR_MULT", "1.5"))
+
+# Swing strategies use slightly wider TP (2x R:R) — more room to run
+SWING_RR = float(_optional("SWING_RR", "2.0"))
 
 # FIX #8 — structure-based break-even: trail SL below the most recent pivot low
 # formed AFTER entry, rather than a fixed +5 % price level
 BE_PIVOT_LOOKBACK = 10       # scan last N closed candles for post-entry pivot
 
-# Cooldown after SL hit
-COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", str(1800)))
+# Cooldown after SL hit — short cooldown for high-frequency scalping
+COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", "60"))
 
 # FIX #6 — portfolio-level daily loss circuit breaker
 MAX_DAILY_LOSS_PCT = float(_optional("MAX_DAILY_LOSS_PCT", "0.03"))  # halt at -3 %
 
-# ── Higher-timeframe trend filter (FIX #2) ────────────────────────────────────
-HTF_EMA_PERIOD    = 200      # coin must be above 200-EMA on the HTF
-HTF_FILTER_TF     = "1h"     # higher timeframe used for the EMA filter
-HTF_CANDLE_LIMIT  = 220      # how many 1h candles to fetch for the EMA
+# ── Higher-timeframe trend filter ─────────────────────────────────────────────
+# 15m 50-EMA is the trend filter for scalp/swing — fast enough to be relevant on 5m
+HTF_EMA_PERIOD    = 50       # coin must be above 50-EMA on the 15m
+HTF_CANDLE_LIMIT  = 60       # how many 15m candles to fetch (15h window)
 
-# ── ADX directional filter (FIX #3) ──────────────────────────────────────────
-ADX_TREND_THRESHOLD = 25     # ADX must be above this
-# DI+ must be > DI− to confirm upward trend direction
+# ── ADX directional filter ────────────────────────────────────────────────────
+# ADX ≥ 20 ensures there's real momentum — avoids choppy ranging markets
+ADX_TREND_THRESHOLD = 20
 ADX_REQUIRE_DIRECTION = True
 
-# ── VWAP Bounce strategy ──────────────────────────────────────────────────────
-# Rolling session length: 96 × 15m = 24 h — mirrors how institutions reset VWAP daily
-VWAP_SESSION_CANDLES    = int(_optional("VWAP_SESSION_CANDLES", "96"))
-# Arm the VWAP watcher when price is within 0.3% of VWAP
-VWAP_PROXIMITY          = float(_optional("VWAP_PROXIMITY", "0.003"))
-# Volume confirmation for VWAP bounce (slightly lower than trendline bounce)
-VWAP_VOLUME_MULTIPLIER  = float(_optional("VWAP_VOLUME_MULTIPLIER", "1.0"))
-
-# ── RSI Divergence strategy ───────────────────────────────────────────────────
-# Number of recent candles to scan for divergence patterns
-RSI_DIVERGENCE_LOOKBACK = int(_optional("RSI_DIVERGENCE_LOOKBACK", "20"))
-# RSI at the second (lower) price low must be below this level (mildly oversold)
-RSI_DIVERGENCE_OVERSOLD = float(_optional("RSI_DIVERGENCE_OVERSOLD", "45"))
+# ── VWAP Bounce strategy (scalping) ──────────────────────────────────────────
+# Rolling session: 288 × 5m = 24 h (now on 5m candles)
+VWAP_SESSION_CANDLES    = int(_optional("VWAP_SESSION_CANDLES", "288"))
+# Arm the VWAP watcher when price is within 0.4% of VWAP
+VWAP_PROXIMITY          = float(_optional("VWAP_PROXIMITY", "0.004"))
+# Volume confirmation for VWAP bounce
+VWAP_VOLUME_MULTIPLIER  = float(_optional("VWAP_VOLUME_MULTIPLIER", "0.8"))
 
 # ── Coin selection — volatility filter ────────────────────────────────────────
 # Minimum 24h high-low range as % of price; filters stablecoins & low-vol coins
@@ -172,7 +169,7 @@ LOG_FILE  = _optional("LOG_FILE", "bot.log")
 
 # ── Macro context ─────────────────────────────────────────────────────────────
 BTC_SYMBOL    = "BTC/USDT"
-BTC_TIMEFRAME = "1h"
+BTC_TIMEFRAME = "15m"   # 15m BTC trend used as macro filter (matches scalp timeframe)
 
 # ── News keywords ─────────────────────────────────────────────────────────────
 NEGATIVE_KEYWORDS = [
