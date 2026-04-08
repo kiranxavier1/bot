@@ -281,7 +281,7 @@ If R:R ≥ 2.0 and at least 2 technical confirmations align, you TRADE.
 ════════════════════════════════════════
 • SL LONG:  below nearest support in market_snapshot.structure.nearest_support, or entry - 1×ATR (min)
 • SL SHORT: above nearest resistance in market_snapshot.structure.nearest_resistance, or entry + 1×ATR (min)
-• SL cap: must be within 1.2% of entry price (no wide stops)
+• SL cap: must be within 0.8% of entry price (no wide stops — hard limit enforced by code)
 • TP: target next resistance (long) or support (short). Minimum R:R = 2.0. If no clear level, use 2× SL distance.
 • Leverage: scale by ATR%:
     ATR% < 0.3% → 15–20×

@@ -269,7 +269,7 @@ class ExecutionerAgent:
                 return
 
         # ── Max open positions guard ──────────────────────────────────────────
-        if self._warden.position_count() >= config.MAX_OPEN_POSITIONS:
+        if len(self._warden._positions) >= config.MAX_CONCURRENT_POSITIONS:
             log.info("❌ Max positions reached — skipping AI trade on %s", symbol)
             return
 
@@ -315,6 +315,7 @@ class ExecutionerAgent:
             direction=direction,
             leverage=ai_decision.get("leverage", 1),
             confidence=ai_decision.get("confidence", 0.0),
+            allocation_pct=ai_decision.get("allocation_pct", config.TRADE_ALLOCATION_PCT),
         )
         return
 
@@ -327,10 +328,11 @@ class ExecutionerAgent:
         swing_tp:  Optional[float] = None,
         target_sl: Optional[float] = None,
         target_tp: Optional[float] = None,
-        strategy:  str = "bounce",
-        direction: str = "long",
-        leverage:  int = 1,
-        confidence: float = 0.0,
+        strategy:     str   = "bounce",
+        direction:    str   = "long",
+        leverage:     int   = 1,
+        confidence:   float = 0.0,
+        allocation_pct: Optional[float] = None,
     ) -> None:
         """
         Place a limit buy at the current ask price (fills like a market order
@@ -418,7 +420,7 @@ class ExecutionerAgent:
             effective_leverage = leverage if config.USE_FUTURES else 1
             
             # AI determines how much of the portfolio to allocate to this trade
-            alloc_pct = best_decision.get("allocation_pct", config.TRADE_ALLOCATION_PCT) / 100.0
+            alloc_pct = (allocation_pct if allocation_pct is not None else config.TRADE_ALLOCATION_PCT) / 100.0
             
             quantity = calculate_position_size(
                 balance_usdt=usdt_free * effective_leverage,
