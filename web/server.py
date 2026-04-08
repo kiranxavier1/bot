@@ -121,6 +121,12 @@ async def api_get_strategy_lessons(strategy: str):
 async def api_list_strategies():
     return list_all_strategies()
 
+@app.post("/api/strategy-lessons/reset")
+async def api_reset_strategy_lessons():
+    from agents.post_mortem import clear_all_strategy_rules
+    clear_all_strategy_rules()
+    return {"success": True}
+
 class AllocationUpdate(BaseModel):
     pct: float
 

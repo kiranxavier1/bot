@@ -157,6 +157,22 @@ def list_all_strategies() -> List[Dict[str, Any]]:
     return result
 
 
+def clear_all_strategy_rules() -> None:
+    """Clear all continuous learning rules and positive patterns from JSON files."""
+    _ensure_dirs()
+    global _STRATEGY_CACHE
+    _STRATEGY_CACHE.clear()
+    
+    all_strategies = ["bounce", "breakout", "vwap_bounce", "ema_cross", "momentum_scalp"]
+    for strat in all_strategies:
+        path = _strategy_path(strat)
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception as e:
+                log.error("Failed to delete strategy file %s: %s", path, e)
+
+
 # ── RetrainingAgent ──────────────────────────────────────────────────────────
 
 class RetrainingAgent:

@@ -694,6 +694,24 @@ function StrategyLearningPanel() {
   const [activeTab, setActiveTab] = useState('bounce');
   const [lessonsData, setLessonsData] = useState(null);
 
+  const handleReset = async () => {
+    if (!window.confirm("Are you sure you want to completely wipe all AI Continuous Learning memory? This cannot be undone.")) return;
+    try {
+      await fetch('/api/strategy-lessons/reset', { method: 'POST' });
+      // Reload strategies and lessons
+      const r = await fetch('/api/strategies');
+      const d = await r.json();
+      setStrategies(d);
+      if (activeTab) {
+        const r2 = await fetch('/api/strategy-lessons/' + activeTab);
+        const d2 = await r2.json();
+        setLessonsData(d2);
+      }
+    } catch (e) {
+      console.error("Failed to reset memory", e);
+    }
+  };
+
   useEffect(() => {
     fetch('/api/strategies')
       .then(r => r.json())
@@ -722,6 +740,7 @@ function StrategyLearningPanel() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
           Continuous Strategy Learning
         </span>
+        <button onClick={handleReset} style={{background:'var(--red-bg)', color:'var(--red)', border:'1px solid var(--red)', padding:'4px 10px', borderRadius:'15px', fontSize:'11px', cursor:'pointer', fontWeight:'600'}}>Reset Memory</button>
       </div>
       
       <div className="tabs-nav">
