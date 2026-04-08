@@ -52,6 +52,7 @@ from agents.ai_manager   import AIManager
 from agents.warden       import WardenAgent
 from agents.executioner  import ExecutionerAgent
 from agents.post_mortem  import RetrainingAgent
+from agents.observer     import ObserverAgent
 from web.server          import run_server, set_test_exchange
 from web.state           import bot_state
 
@@ -207,6 +208,7 @@ async def main() -> None:
         log.error("Failed to load initial live balance: %s", e)
     
     retrainer = RetrainingAgent(exchange=exchange)
+    observer  = ObserverAgent()
 
     # ── 3. Scout ──────────────────────────────────────────────────────────────
     scout = ScoutAgent(
@@ -234,7 +236,7 @@ async def main() -> None:
         f"Exchange  : Binance {'Futures' if config.USE_FUTURES else 'Spot'}\n"
         f"Pairs     : {len(symbols)} USDT symbols\n"
         f"Timeframes: {', '.join(config.TIMEFRAMES)}\n"
-        f"AI model  : <code>{config.GEMINI_MODEL}</code>"
+        f"AI model  : <code>{config.ANTHROPIC_MODEL}</code>"
     )
 
     # ── 7. Background tasks ───────────────────────────────────────────────────
@@ -248,6 +250,8 @@ async def main() -> None:
     ]
     if (r_task := retrainer.start()):
         tasks.append(r_task)
+    if (o_task := observer.start()):
+        tasks.append(o_task)
 
     log.info("All tasks started — bot is running.  Press Ctrl-C to stop.")
     log.info("📊 Dashboard → http://localhost:8000")

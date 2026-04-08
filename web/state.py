@@ -64,6 +64,9 @@ class BotState:
         # Watcher alerts log  (deque, newest first)
         self._alerts: Deque[Dict] = deque(maxlen=MAX_ALERTS)
 
+        # Observer's overarching global directive
+        self.observer_directive: str = "Trade aggressively and prioritize high-momentum setups."
+
         # Analyzed trades log (deque, newest first)
         self._trade_analyses: Deque[Dict] = deque(maxlen=MAX_TRADES)
 
@@ -353,6 +356,7 @@ class BotState:
                     "started_at":       self.started_at,
                     "is_running":       self.is_running,
                     "symbols_tracked":  self.symbols_tracked,
+                    "observer_directive": self.observer_directive,
                     "uptime_seconds":   int(
                         (datetime.now(timezone.utc) -
                          datetime.fromisoformat(self.started_at)).total_seconds()

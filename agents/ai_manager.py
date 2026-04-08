@@ -234,6 +234,7 @@ def build_proactive_proposal(
         "detected_patterns":         detected_patterns,
         "continuous_learning_rules": all_rules[:12],   # cap to avoid token bloat
         "golden_setups":             all_setups[:6],
+        "observer_directive":        bot_state.observer_directive,
         "request": (
             "Analyze this market snapshot and decide whether to enter a trade RIGHT NOW. "
             "You are the strategy engine — pick the best opportunity. You MUST highly prioritize making a TRADE over PASS. "
@@ -290,6 +291,7 @@ If R:R ≥ 2.0 and at least 2 technical confirmations align, you TRADE.
 • PASS:  ONLY if ADX < 15 AND no momentum AND no pattern — truly directionless market. Do NOT PASS to "wait for better".
 • NEVER PASS just because it is not a "textbook" setup. A 60% setup with 2:1 R:R is TRADE.
 • You MUST respect any rule in continuous_learning_rules (these are hard constraints from past losses).
+• You MUST respect the global `observer_directive` strictly. It overrides standard logic.
 • Golden setups in golden_setups should boost confidence by +0.15.
 • Detected patterns from the code-level analysis (detected_patterns) are strong hints — weight them heavily.
 
@@ -534,8 +536,32 @@ class AIManager:
                 "decision":   "PASS",
                 "confidence": 0.0,
                 "reasoning":  f"API error: {exc}",
-                "risks":      ["Gemini API unavailable"],
+                "risks":      ["Anthropic API unavailable"],
             }
+
+    async def evaluate_observer(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        """
+        Special API call for the top-level Observer Agent to audit bot performance.
+        Expected to return a JSON dict overriding config and setting macro directives.
+        """
+        try:
+            response = await self._client.messages.create(
+                model=config.ANTHROPIC_MODEL,
+                max_tokens=800,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}]
+            )
+            raw_text = response.content[0].text.strip()
+            
+            if "```" in raw_text:
+                start = raw_text.find("{")
+                end   = raw_text.rfind("}") + 1
+                raw_text  = raw_text[start:end]
+                
+            return json.loads(raw_text)
+        except Exception as exc:
+            log.error("Observer API error: %s", exc)
+            return {}
 
     @staticmethod
     def _parse_proactive_decision(text: str) -> Dict[str, Any]:
