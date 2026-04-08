@@ -284,6 +284,7 @@ def calculate_position_size(
     stop_loss:    float,
     risk_pct:     float = None,
     fixed_stake:  float = None,
+    alloc_pct:    float = None,
 ) -> float:
     """
     Capital-based position sizing dynamically driven by the UI dashboard state, 
@@ -296,7 +297,8 @@ def calculate_position_size(
     if fixed_stake is not None:
         capital_to_deploy = fixed_stake
     else:
-        alloc_pct = bot_state.trade_allocation_pct / 100.0
+        if alloc_pct is None:
+            alloc_pct = bot_state.trade_allocation_pct / 100.0
         capital_to_deploy = balance_usdt * alloc_pct
     
     return capital_to_deploy / entry_price

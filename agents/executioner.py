@@ -139,15 +139,7 @@ class ExecutionerAgent:
         if timeframe != config.SIGNAL_TIMEFRAME:
             return
 
-        # ── Session timing filter — active trading hours 06:00-20:00 UTC ───
-        if not is_prime_session():
-            log.debug("Outside prime session — skipping new entries for %s", symbol)
-            return
-
-        # ── Weekend filter — Sat/Sun have low volume & high false-positive rate ─
-        if not is_weekday():
-            log.debug("Weekend — skipping new entries for %s", symbol)
-            return
+        # ── Session timing & weekend filters removed for high-frequency trading ───
 
         # ── Cooldown guard ────────────────────────────────────────────────────
         if self._warden.is_on_cooldown(symbol):
@@ -509,10 +501,15 @@ class ExecutionerAgent:
             # For Futures: leverage scales the notional exposure of our margin.
             # e.g. 5% of $200 balance = $10 margin × 5x leverage = $50 position.
             effective_leverage = leverage if config.USE_FUTURES else 1
+            
+            # AI determines how much of the portfolio to allocate to this trade
+            alloc_pct = best_decision.get("allocation_pct", config.TRADE_ALLOCATION_PCT) / 100.0
+            
             quantity = calculate_position_size(
                 balance_usdt=usdt_free * effective_leverage,
                 entry_price=market_price,
                 stop_loss=stop_loss,
+                alloc_pct=alloc_pct,
             )
             if quantity <= 0:
                 log.warning("Zero quantity for %s — skipping", symbol)

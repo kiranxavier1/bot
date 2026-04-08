@@ -170,10 +170,10 @@ def build_proposal(
             "If a clear 5m trend (up or down) is happening, you should lean toward PROCEED. "
             "You MUST rigidly respect any active rules listed in continuous_learning_rules. "
             "You SHOULD prioritize setups that align with the golden_setups provided. "
-            "Select an appropriate leverage (1-20x) based on setup quality and volatility. "
+            "Select an appropriate leverage (1-20x) and trade allocation percentage (1.0-50.0) based on setup quality and volatility. "
             "Return ONLY valid JSON with keys: "
             "decision (PROCEED or REJECT), confidence (0.0–1.0), "
-            "leverage (int 1-20), reasoning (string), risks (list of strings)."
+            "leverage (int 1-20), allocation_pct (float 1.0-50.0), reasoning (string), risks (list of strings)."
         ),
     }
     # Retrieve lessons for this strategy
@@ -255,6 +255,7 @@ Respond ONLY with valid JSON, no markdown:
   "decision":   "PROCEED" or "REJECT",
   "confidence": <float 0.0–1.0>,
   "leverage":   <int 1–20>,
+  "allocation_pct": <float 1.0-50.0>,
   "reasoning":  "<concise 1 sentence explanation>",
   "risks":      ["<risk 1>"]
 }
@@ -342,23 +343,26 @@ class AIManager:
                 "risks":      ["Parse error"],
             }
 
-        decision   = str(data.get("decision", "REJECT")).upper()
-        confidence = float(data.get("confidence", 0.0))
-        leverage   = int(data.get("leverage", 1))
-        reasoning  = str(data.get("reasoning", ""))
+        decision       = str(data.get("decision", "REJECT")).upper()
+        confidence     = float(data.get("confidence", 0.0))
+        leverage       = int(data.get("leverage", 1))
+        allocation_pct = float(data.get("allocation_pct", config.TRADE_ALLOCATION_PCT))
+        reasoning      = str(data.get("reasoning", ""))
         risks: List[str] = [str(r) for r in data.get("risks", [])]
 
         if decision not in ("PROCEED", "REJECT"):
             decision = "REJECT"
-        confidence = max(0.0, min(1.0, confidence))
-        leverage   = max(1, min(config.MAX_LEVERAGE, leverage))
+        confidence     = max(0.0, min(1.0, confidence))
+        leverage       = max(1, min(config.MAX_LEVERAGE, leverage))
+        allocation_pct = max(1.0, min(100.0, allocation_pct))
 
         return {
-            "decision":   decision,
-            "confidence": confidence,
-            "leverage":   leverage,
-            "reasoning":  reasoning,
-            "risks":      risks,
+            "decision":       decision,
+            "confidence":     confidence,
+            "leverage":       leverage,
+            "allocation_pct": allocation_pct,
+            "reasoning":      reasoning,
+            "risks":          risks,
         }
 
     def should_proceed(self, decision: Dict[str, Any]) -> bool:

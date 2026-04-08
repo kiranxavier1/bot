@@ -591,7 +591,7 @@ def is_ema_bullish_stack(df: pd.DataFrame, periods: tuple = (9, 21, 50)) -> bool
         if len(close) < max(periods) + 2:
             return False
         vals = [float(calc_ema(close, p).iloc[-1]) for p in periods]
-        return vals[0] > vals[1] > vals[2]
+        return vals[0] > vals[1]   # relaxed from vals[0] > vals[1] > vals[2] for 1m frequent trading
     except Exception as exc:
         log.warning("EMA stack check failed: %s", exc)
         return False
@@ -607,7 +607,7 @@ def is_ema_bearish_stack(df: pd.DataFrame, periods: tuple = (9, 21, 50)) -> bool
         if len(close) < max(periods) + 2:
             return False
         vals = [float(calc_ema(close, p).iloc[-1]) for p in periods]
-        return vals[0] < vals[1] < vals[2]
+        return vals[0] < vals[1]   # relaxed from vals[0] < vals[1] < vals[2] for 1m frequent trading
     except Exception as exc:
         log.warning("EMA bearish stack check failed: %s", exc)
         return False
@@ -627,10 +627,9 @@ def detect_bullish_engulfing(candles: list) -> bool:
         curr = candles[-1]
         prev_bearish = float(prev["close"]) < float(prev["open"])
         curr_bullish  = float(curr["close"]) > float(curr["open"])
-        # Current candle body fully engulfs previous candle body
-        engulfs = (float(curr["close"]) >= float(prev["open"]) and
-                   float(curr["open"]) <= float(prev["close"]))
-        return bool(prev_bearish and curr_bullish and engulfs)
+        # Relaxed for 1m scale: bypass strictly full engulfing to just require a nice up candle
+        engulfs = True 
+        return bool(curr_bullish and engulfs)
     except Exception as exc:
         log.warning("Bullish engulfing detection failed: %s", exc)
         return False
@@ -648,10 +647,9 @@ def detect_bearish_engulfing(candles: list) -> bool:
         curr = candles[-1]
         prev_bullish = float(prev["close"]) > float(prev["open"])
         curr_bearish = float(curr["close"]) < float(curr["open"])
-        # Current candle body fully engulfs previous candle body
-        engulfs = (float(curr["close"]) <= float(prev["open"]) and
-                   float(curr["open"]) >= float(prev["close"]))
-        return bool(prev_bullish and curr_bearish and engulfs)
+        # Relaxed for 1m scale: bypass strictly full engulfing to just require a nice down candle
+        engulfs = True
+        return bool(curr_bearish and engulfs)
     except Exception as exc:
         log.warning("Bearish engulfing detection failed: %s", exc)
         return False
