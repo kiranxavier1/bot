@@ -192,6 +192,130 @@ def build_proposal(
     return proposal
 
 
+# ── Proactive proposal builder ────────────────────────────────────────────────
+
+def build_proactive_proposal(
+    symbol:          str,
+    timeframe:       str,
+    market_snapshot: Dict,
+    btc_df,
+    strategy_signals: List[Dict] = None,
+) -> Dict[str, Any]:
+    """
+    Build a full market analysis proposal for proactive AI trading.
+    The AI receives the full technical snapshot and decides whether/where to trade.
+    """
+    from agents.post_mortem import load_strategy_rules, load_strategy_golden_setups
+
+    btc_sentiment = (
+        btc_trend(btc_df)
+        if btc_df is not None and len(btc_df) >= 50
+        else "unknown"
+    )
+    ccy       = symbol.split("/")[0]
+    news_safe = fetch_news_sentiment(ccy, config.CRYPTOPANIC_API_KEY)
+
+    # Detected patterns from the Mathematician (hints for the AI, not requirements)
+    detected_patterns = [
+        {"strategy": s["strategy"], "direction": s["direction"]}
+        for s in (strategy_signals or [])
+    ]
+
+    # Aggregate continuous-learning rules and golden setups across all strategies
+    all_strategies = [
+        "bounce", "breakout", "vwap_bounce", "ema_cross", "momentum_scalp",
+        "vwap_reject_short", "ema_cross_short", "momentum_short",
+    ]
+    all_rules: List[str] = []
+    all_setups: List[str] = []
+    for strat in all_strategies:
+        all_rules.extend(load_strategy_rules(strat))
+        all_setups.extend(load_strategy_golden_setups(strat))
+
+    return {
+        "symbol":                    symbol,
+        "timeframe":                 timeframe,
+        "btc_trend":                 btc_sentiment,
+        "news_safe":                 news_safe,
+        "market_snapshot":           market_snapshot,
+        "detected_patterns":         detected_patterns,
+        "continuous_learning_rules": all_rules[:12],   # cap to avoid token bloat
+        "golden_setups":             all_setups[:6],
+        "request": (
+            "Analyze this market snapshot and decide whether to enter a trade RIGHT NOW. "
+            "You are the strategy engine — pick the best opportunity or PASS if truly ambiguous. "
+            "Set entry_price, stop_loss, take_profit, leverage, allocation_pct when decision is TRADE."
+        ),
+    }
+
+
+# ── Proactive system prompt ────────────────────────────────────────────────────
+
+_PROACTIVE_SYSTEM_PROMPT = """\
+You are an expert cryptocurrency futures trader and the PRIMARY STRATEGY ENGINE for a Binance Futures bot.
+Your job: analyze the market snapshot and DECIDE WHETHER TO TRADE RIGHT NOW — back to back, candle by candle.
+
+You do NOT wait for a "perfect" setup. You trade the best available opportunity on every candle.
+If R:R ≥ 2.0 and at least 2 technical confirmations align, you TRADE.
+
+════════════════════════════════════════
+ LONG setups to look for
+════════════════════════════════════════
+• EMA bullish stack (9>21>50) + RSI-7 > 50 + above VWAP → momentum long
+• Price above EMA50, pulling back to VWAP or EMA21, bull engulfing candle → pullback long
+• EMA 9/21 just crossed up + ADX rising + DI+ > DI- → trend entry long
+• BB lower band + StochRSI K < 20 crossing above D + reversal candle → mean-reversion long
+• 3 consecutive bull closes + volume above avg + above EMA50 → momentum continuation long
+
+════════════════════════════════════════
+ SHORT setups to look for
+════════════════════════════════════════
+• EMA bearish stack (9<21<50) + RSI-7 < 50 + below VWAP → momentum short
+• Price below EMA50, bouncing to VWAP or EMA21, bear engulfing candle → pullback short
+• EMA 9/21 just crossed down + ADX rising + DI- > DI+ → trend entry short
+• BB upper band + StochRSI K > 80 crossing below D + rejection candle → mean-reversion short
+• 3 consecutive bear closes + volume above avg + below EMA50 → momentum continuation short
+
+════════════════════════════════════════
+ SL / TP rules (YOU set these)
+════════════════════════════════════════
+• SL LONG:  below nearest support in market_snapshot.structure.nearest_support, or entry - 1×ATR (min)
+• SL SHORT: above nearest resistance in market_snapshot.structure.nearest_resistance, or entry + 1×ATR (min)
+• SL cap: must be within 1.2% of entry price (no wide stops)
+• TP: target next resistance (long) or support (short). Minimum R:R = 2.0. If no clear level, use 2× SL distance.
+• Leverage: scale by ATR%:
+    ATR% < 0.3% → 15–20×
+    ATR% 0.3–0.6% → 10–15×
+    ATR% > 0.6% → 5–10×
+  Reduce 30% if BTC bearish or ADX < 20.
+
+════════════════════════════════════════
+ Decision rules
+════════════════════════════════════════
+• TRADE: 2+ technical confirmations from the setups above AND R:R ≥ 2.0 AND news_safe is true
+• PASS:  ADX < 15 AND no momentum AND no pattern — truly directionless market
+• NEVER PASS just because it is not a "textbook" setup. A 60% setup with 2:1 R:R is TRADE.
+• You MUST respect any rule in continuous_learning_rules (these are hard constraints from past losses).
+• Golden setups in golden_setups should boost confidence by +0.15.
+• Detected patterns from the code-level analysis (detected_patterns) are strong hints — weight them heavily.
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "decision":       "TRADE" or "PASS",
+  "direction":      "long" or "short",
+  "entry_price":    <float — use current price from market_snapshot.price.current>,
+  "stop_loss":      <float>,
+  "take_profit":    <float>,
+  "confidence":     <float 0.0–1.0>,
+  "leverage":       <int 1–20>,
+  "allocation_pct": <float 1.0–50.0>,
+  "strategy_used":  "<brief name: e.g. momentum_long, pullback_short, mean_reversion_long>",
+  "reasoning":      "<1 concise sentence>",
+  "risks":          ["<risk 1>"]
+}
+"""
+
+
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = """\
@@ -218,23 +342,23 @@ in the detection code. These are pre-confirmed confluences — do NOT re-penalis
 
 Evaluation — lean heavily toward PROCEED
 ─────────────────────────────────────────
-"bounce":         R:R ≥ 3.0, DI+ > DI-. EMA stack + RSI already confirmed. Trust the trendline.
-"breakout":       R:R ≥ 3.0, DI+ > DI-. Retest + RSI + VWAP already confirmed. Enter aggressively.
-"vwap_bounce":    R:R ≥ 3.0, DI+ > DI-. VWAP + RSI + EMA stack confirmed. Best scalp anchor.
-"ema_cross":      R:R ≥ 3.0, DI+ > DI-. EMA cross + RSI + VWAP triple-confirmed. Highest win rate setup.
-"momentum_scalp": R:R ≥ 3.0, DI+ > DI-. RSI + VWAP + engulfing all confirmed. Enter fast.
+"bounce":         R:R ≥ 2.0, DI+ > DI-. EMA stack + RSI already confirmed. Trust the trendline.
+"breakout":       R:R ≥ 2.0, DI+ > DI-. Retest + RSI + VWAP already confirmed. Enter aggressively.
+"vwap_bounce":    R:R ≥ 2.0, DI+ > DI-. VWAP + RSI + EMA stack confirmed. Best scalp anchor.
+"ema_cross":      R:R ≥ 2.0, DI+ > DI-. EMA cross + RSI + VWAP triple-confirmed. Highest win rate setup.
+"momentum_scalp": R:R ≥ 2.0, DI+ > DI-. RSI + VWAP + engulfing all confirmed. Enter fast.
 
 Hard rules (REJECT only for these)
 ────────────────────────────────────
 1. News: REJECT if news_safe is false.
 2. Continuous learning: REJECT if a rule in continuous_learning_rules explicitly forbids this exact setup.
-3. R:R < 2.5: REJECT any setup where reward_risk < 2.5 — below our minimum expectancy threshold.
+3. R:R < 2.0: REJECT any setup where reward_risk < 2.0 — below our minimum expectancy threshold.
 4. DI- > DI+: REJECT if the market is clearly moving against the long direction.
 
 Everything else → PROCEED. Do not invent reasons to REJECT. A setup passing the 4 checks above
-should be approved. We have 3–4× R:R built in, so even a 30% win rate is profitable.
+should be approved. We have 2–3× R:R built in, so even a 35% win rate is profitable.
 
-BTC context: only reject on "bearish" BTC if R:R < 3.0. If R:R ≥ 3.0, proceed regardless.
+BTC context: only reject on "bearish" BTC if R:R < 2.5. If R:R ≥ 2.5, proceed regardless.
 
 Leverage guidance
 ─────────────────
@@ -244,9 +368,9 @@ Leverage guidance
 
 Confidence calibration
 ───────────────────────
-• 0.70+ : PROCEED — setup is valid, enter the trade
-• 0.50–0.69 : PROCEED if R:R ≥ 3.5 — marginal but positive expectancy
-• Below 0.50 : REJECT — something fundamental is wrong
+• 0.60+ : PROCEED — setup is valid, enter the trade
+• 0.40–0.59 : PROCEED if R:R ≥ 2.5 — marginal but positive expectancy
+• Below 0.40 : REJECT — something fundamental is wrong
 
 Golden setups: if proposal matches any golden_setup pattern, add +0.15 to confidence and PROCEED.
 
@@ -371,3 +495,119 @@ class AIManager:
             decision.get("decision") == "PROCEED"
             and decision.get("confidence", 0.0) >= config.MIN_AI_CONFIDENCE
         )
+
+    # ── Proactive market analysis ──────────────────────────────────────────────
+
+    async def analyze_market(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Proactive market analysis — AI acts as the strategy engine.
+        Sends a full market snapshot and expects: direction, entry, SL, TP.
+        Falls back to PASS on any error.
+        """
+        user_msg = json.dumps(proposal, indent=2)
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=config.GEMINI_MODEL,
+                contents=user_msg,
+                config=types.GenerateContentConfig(
+                    system_instruction=_PROACTIVE_SYSTEM_PROMPT,
+                )
+            )
+            raw_text = response.text.strip()
+            decision = self._parse_proactive_decision(raw_text)
+
+            log.info(
+                "🤖 Proactive AI [%s]: %s dir=%s conf=%.2f — %s",
+                proposal.get("symbol"),
+                decision.get("decision"),
+                decision.get("direction", "—"),
+                decision.get("confidence", 0.0),
+                decision.get("reasoning", "")[:120],
+            )
+
+            asyncio.create_task(bot_state.push_ai_decision(
+                symbol=proposal.get("symbol", "?"),
+                timeframe=proposal.get("timeframe", "?"),
+                decision=decision.get("decision", "PASS"),
+                confidence=decision.get("confidence", 0.0),
+                leverage=decision.get("leverage", 1),
+                reasoning=decision.get("reasoning", ""),
+                risks=decision.get("risks", []),
+                strategy=decision.get("strategy_used", "ai_proactive"),
+            ))
+            return decision
+
+        except Exception as exc:
+            log.error("analyze_market API error: %s — defaulting to PASS", exc)
+            return {
+                "decision":   "PASS",
+                "confidence": 0.0,
+                "reasoning":  f"API error: {exc}",
+                "risks":      ["Gemini API unavailable"],
+            }
+
+    @staticmethod
+    def _parse_proactive_decision(text: str) -> Dict[str, Any]:
+        """Parse the proactive AI response (TRADE/PASS with full SL/TP)."""
+        if "```" in text:
+            start = text.find("{")
+            end   = text.rfind("}") + 1
+            text  = text[start:end]
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            log.warning("Failed to parse proactive AI response: %s\nRaw: %r", exc, text)
+            return {
+                "decision":   "PASS",
+                "confidence": 0.0,
+                "reasoning":  "Malformed AI response",
+                "risks":      ["Parse error"],
+            }
+
+        decision   = str(data.get("decision", "PASS")).upper()
+        direction  = str(data.get("direction", "long")).lower()
+        confidence = float(data.get("confidence", 0.0))
+        leverage   = int(data.get("leverage", 1))
+        alloc_pct  = float(data.get("allocation_pct", config.TRADE_ALLOCATION_PCT))
+
+        if decision not in ("TRADE", "PASS"):
+            decision = "PASS"
+        if direction not in ("long", "short"):
+            direction = "long"
+        confidence = max(0.0, min(1.0, confidence))
+        leverage   = max(1, min(config.MAX_LEVERAGE, leverage))
+        alloc_pct  = max(1.0, min(100.0, alloc_pct))
+
+        return {
+            "decision":       decision,
+            "direction":      direction,
+            "entry_price":    float(data.get("entry_price", 0.0)),
+            "stop_loss":      float(data.get("stop_loss",   0.0)),
+            "take_profit":    float(data.get("take_profit",  0.0)),
+            "confidence":     confidence,
+            "leverage":       leverage,
+            "allocation_pct": alloc_pct,
+            "strategy_used":  str(data.get("strategy_used", "ai_proactive")),
+            "reasoning":      str(data.get("reasoning", "")),
+            "risks":          [str(r) for r in data.get("risks", [])],
+        }
+
+    def should_trade_proactive(self, decision: Dict[str, Any]) -> bool:
+        """
+        True if AI says TRADE with confidence ≥ threshold and valid SL/TP geometry.
+        """
+        if decision.get("decision") != "TRADE":
+            return False
+        if decision.get("confidence", 0.0) < config.MIN_AI_CONFIDENCE:
+            return False
+        entry     = float(decision.get("entry_price", 0.0))
+        stop_loss = float(decision.get("stop_loss",   0.0))
+        take_profit = float(decision.get("take_profit", 0.0))
+        if entry <= 0 or stop_loss <= 0 or take_profit <= 0:
+            return False
+        direction = decision.get("direction", "long")
+        if direction == "long":
+            return stop_loss < entry < take_profit
+        else:
+            return take_profit < entry < stop_loss

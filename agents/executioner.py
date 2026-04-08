@@ -46,7 +46,7 @@ import pandas as pd
 
 import config
 from agents.mathematician import MathematicianAgent
-from agents.ai_manager    import AIManager, build_proposal
+from agents.ai_manager    import AIManager, build_proposal, build_proactive_proposal
 from utils.indicators     import (
     calc_atr,
     market_regime,
@@ -192,11 +192,9 @@ class ExecutionerAgent:
             ))
 
         strategy_signals = math_result.get("strategy_signals", [])
-        if not strategy_signals:
-            return
+        market_snapshot  = math_result.get("market_snapshot", {})
 
         # Push every detected signal to the Live Opportunities panel immediately
-        # so the user can see all strategies firing in real time, before AI filtering.
         live_price = candles[-1]["close"]
         for _sig in strategy_signals:
             _entry = _sig.get("entry_price", live_price)
@@ -214,202 +212,111 @@ class ExecutionerAgent:
                 rr=_rr,
             ))
 
-        # ── Pre-compute common filters (15m HTF only — no 1h needed for scalping) ─
+        # ── Pre-compute common filters (15m HTF only) ─────────────────────────
         htf_15m_df = await self._get_htf_df(symbol, "15m")
-
-        # EMA-50 on 15m: coin must be above it to take long entries, below for shorts
         htf_above_ema = price_above_ema200(htf_15m_df) if htf_15m_df is not None else True
         htf_below_ema = price_below_ema200(htf_15m_df) if htf_15m_df is not None else True
 
         regime, adx, di_plus, di_minus = market_regime(symbol_df)
-        atr = calc_atr(symbol_df)
+        atr    = calc_atr(symbol_df)
         btc_df = await self._get_df(config.BTC_SYMBOL, config.BTC_TIMEFRAME)
 
-        # ── BTC sharp-drop / rise macro filter ───────────────────────────────
         btc_dropping = btc_is_dropping(btc_df)
         btc_rising   = btc_is_rising(btc_df)
 
-        valid_signals = []
-        for sig in strategy_signals:
-            strategy = sig["strategy"]
-            direction = sig.get("direction", "long")
-            log.info("🎯 Signal detected: %s [%s] strategy=%s dir=%s — running pre-trade filters...", symbol, timeframe, strategy, direction)
+        # ── PROACTIVE AI ANALYSIS ─────────────────────────────────────────────
+        # The AI receives the full market snapshot every candle (with detected
+        # patterns as hints) and decides whether to trade, in which direction,
+        # and sets its own SL/TP. No rigid pattern match required.
+        proactive_proposal = build_proactive_proposal(
+            symbol=symbol,
+            timeframe=timeframe,
+            market_snapshot=market_snapshot,
+            btc_df=btc_df,
+            strategy_signals=strategy_signals,
+        )
+        ai_decision = await self._ai.analyze_market(proactive_proposal)
 
-            if direction == "long":
-                if btc_dropping:
-                    log.info("❌ BTC drop filter rejected %s — paused long entries", symbol)
-                    continue
-                if not htf_above_ema:
-                    log.info("❌ HTF filter rejected %s (%s) — price BELOW 15m EMA-50", symbol, strategy)
-                    continue
-                if config.ADX_REQUIRE_DIRECTION and di_minus >= di_plus:
-                    log.info("❌ Direction rejected %s (%s) — DI- > DI+", symbol, strategy)
-                    continue
-            else:
-                if btc_rising:
-                    log.info("❌ BTC rise filter rejected %s — paused short entries", symbol)
-                    continue
-                if not htf_below_ema:
-                    log.info("❌ HTF filter rejected %s (%s) — price ABOVE 15m EMA-50", symbol, strategy)
-                    continue
-                if config.ADX_REQUIRE_DIRECTION and di_plus >= di_minus:
-                    log.info("❌ Direction rejected %s (%s) — DI+ > DI-", symbol, strategy)
-                    continue
-
-            # Trend strategies also need minimum ADX momentum
-            if strategy in ("bounce", "breakout", "vwap_bounce", "momentum_scalp", "vwap_reject_short", "ema_cross_short", "momentum_short"):
-                if adx < config.ADX_TREND_THRESHOLD:
-                    log.info("❌ ADX filter rejected %s (%s) — ADX=%.1f too low", symbol, strategy, adx)
-                    continue
-
-            # Candle close strength (long) vs weakness (short)
-            conf_candle = sig.get("confirmation_candle", {})
-            if conf_candle:
-                if direction == "long" and not candle_close_strength(conf_candle):
-                    log.info("❌ Close-strength rejected %s (%s)", symbol, strategy)
-                    continue
-                if direction == "short" and not candle_close_weakness(conf_candle):
-                    log.info("❌ Close-weakness rejected %s (%s)", symbol, strategy)
-                    continue
-
-            log.info("✅ Pre-trade filters passed for %s (strategy: %s, dir: %s)", symbol, strategy, direction)
-            valid_signals.append(sig)
-
-        if not valid_signals:
-            return
-
-        async def _eval_signal(sig):
-            strategy = sig["strategy"]
-            direction = sig.get("direction", "long")
-            conf_candle = sig["confirmation_candle"]
-            entry_est = sig["entry_price"]
-            swing_tp_math = sig.get("swing_tp_target")
-            trendline = math_result.get("trendline")
-            trendline_slope = trendline.slope if trendline else 0.0
-            touch_count = math_result.get("touch_count", 0)
-            vol_ratio = math_result.get("vol_ratio", 1.0)
-            prox_pct = math_result.get("proximity_pct", 0.0)
-
-            raw_sl = sig.get("stop_loss")
-            if not raw_sl:
-                if atr > 0 and config.USE_STRUCTURAL_SL and htf_15m_df is not None:
-                    if direction == "long":
-                        raw_sl = find_structural_sl_from_df(htf_15m_df, entry_est, atr)
-                    else:
-                        raw_sl = find_structural_sl_short_from_df(htf_15m_df, entry_est, atr)
-                    log.info("📐 Structural SL for %s: %.6g (15m pivot-based)", symbol, raw_sl)
-                elif atr > 0:
-                    if direction == "long":
-                        raw_sl = calculate_stop_loss_atr(entry_est, atr)
-                    else:
-                        raw_sl = entry_est + atr * config.ATR_MULTIPLIER
-                else:
-                    if direction == "long":
-                        raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
-                    else:
-                        raw_sl = entry_est * (1.0 + config.MAX_SL_PCT / 2)
-
-            # Max SL% cap — skip trade if SL is too wide (volatile spike protection)
-            if raw_sl and entry_est > 0:
-                sl_pct = abs(entry_est - raw_sl) / entry_est * 100
-                if sl_pct > config.MAX_SL_PCT:
-                    log.info(
-                        "❌ SL too wide for %s (%s) — SL=%.2f%% > MAX %.2f%%",
-                        symbol, strategy, sl_pct, config.MAX_SL_PCT,
-                    )
-                    return
-
-            raw_tp = sig.get("take_profit")
-            tp_source = "strategy_default"
-            if not raw_tp:
-                if direction == "long":
-                    if swing_tp_math and swing_tp_math > entry_est:
-                        raw_tp = swing_tp_math
-                        tp_source = "swing_high"
-                    else:
-                        raw_tp = calculate_take_profit(entry_est, raw_sl)
-                        tp_source = "fixed_rr"
-                else:
-                    if swing_tp_math and swing_tp_math < entry_est:
-                        raw_tp = swing_tp_math
-                        tp_source = "swing_low"
-                    else:
-                        raw_tp = entry_est - abs(entry_est - raw_sl) * config.MIN_RR_FALLBACK
-                        tp_source = "fixed_rr"
-
-            proposal = build_proposal(
-                strategy=strategy,
-                symbol=symbol,
-                timeframe=timeframe,
-                entry_price=entry_est,
-                stop_loss=raw_sl,
-                take_profit=raw_tp,
-                confirmation_candle=conf_candle,
-                trendline_slope=trendline_slope,
-                touch_proximity_pct=prox_pct,
-                btc_df=btc_df,
-                symbol_df=symbol_df,
-                touch_count=touch_count,
-                vol_ratio=vol_ratio,
-                swing_tp_target=swing_tp_math,
-                tp_source=tp_source,
-                atr=atr,
-                adx=adx,
-                di_plus=di_plus,
-                di_minus=di_minus,
-                htf_above_ema=htf_above_ema,
+        if not self._ai.should_trade_proactive(ai_decision):
+            log.debug(
+                "🤖 Proactive AI PASS for %s (conf=%.2f) — %s",
+                symbol, ai_decision.get("confidence", 0.0),
+                ai_decision.get("reasoning", "")[:80],
             )
-
-            decision = await self._ai.evaluate(proposal)
-            return sig, decision, raw_sl, raw_tp, swing_tp_math, conf_candle
-
-        eval_tasks = [_eval_signal(sig) for sig in valid_signals]
-        results = await asyncio.gather(*eval_tasks, return_exceptions=True)
-
-        approved = []
-        for result in results:
-            if isinstance(result, Exception):
-                log.error("AI Evaluation failed with exception: %s", result)
-                continue
-            
-            sig, decision, raw_sl, raw_tp, swing_tp_math, conf_candle = result
-            strategy = sig["strategy"]
-            if not self._ai.should_proceed(decision):
-                log.info("🤖 AI rejected %s (%s) conf=%.2f — %s", symbol, strategy, decision.get("confidence", 0.0), decision.get("reasoning", "")[:100])
-                # We optionally fire off a reject message here, but async so it doesn't block.
-                asyncio.create_task(self._notifier.send(
-                    Notifier.ai_rejected_msg(
-                        symbol=symbol,
-                        reason=decision.get("reasoning", "No reason given"),
-                        confidence=decision.get("confidence", 0.0),
-                    )
-                ))
-                continue
-            
-            approved.append((sig, decision, raw_sl, raw_tp, swing_tp_math, conf_candle))
-
-        if not approved:
             return
 
-        # Sort by confidence descending, pick the absolute best one
-        approved.sort(key=lambda x: x[1].get("confidence", 0.0), reverse=True)
-        best_sig, best_decision, best_sl, best_tp, best_swing_tp, best_conf_candle = approved[0]
-        strategy = best_sig["strategy"]
+        direction = ai_decision["direction"]   # "long" | "short"
+        log.info(
+            "🤖 Proactive AI TRADE: %s dir=%s conf=%.2f — %s",
+            symbol, direction, ai_decision.get("confidence", 0.0),
+            ai_decision.get("reasoning", "")[:100],
+        )
 
-        log.info("✅ AI approved best setup (%s) for %s — executing limit buy (conf: %.2f)", strategy, symbol, best_decision.get("confidence", 0.0))
+        # ── Apply hard macro/HTF safety filters to AI's direction ─────────────
+        if direction == "long":
+            if btc_dropping:
+                log.info("❌ BTC drop filter blocked AI LONG on %s", symbol)
+                return
+            if not htf_above_ema:
+                log.info("❌ HTF EMA filter blocked AI LONG on %s — below 15m EMA-50", symbol)
+                return
+        else:
+            if btc_rising:
+                log.info("❌ BTC rise filter blocked AI SHORT on %s", symbol)
+                return
+            if not htf_below_ema:
+                log.info("❌ HTF EMA filter blocked AI SHORT on %s — above 15m EMA-50", symbol)
+                return
+
+        # ── Max open positions guard ──────────────────────────────────────────
+        if self._warden.position_count() >= config.MAX_OPEN_POSITIONS:
+            log.info("❌ Max positions reached — skipping AI trade on %s", symbol)
+            return
+
+        # ── Validate and cap SL/TP from AI decision ───────────────────────────
+        entry_price = float(ai_decision["entry_price"])
+        raw_sl      = float(ai_decision["stop_loss"])
+        raw_tp      = float(ai_decision["take_profit"])
+
+        sl_pct = abs(entry_price - raw_sl) / entry_price * 100
+        if sl_pct > config.MAX_SL_PCT:
+            log.info(
+                "❌ AI SL too wide for %s — SL=%.2f%% > MAX %.2f%%, skipping",
+                symbol, sl_pct, config.MAX_SL_PCT,
+            )
+            return
+
+        rr = abs(raw_tp - entry_price) / abs(entry_price - raw_sl) if raw_sl != entry_price else 0.0
+        if rr < config.MIN_RR_FALLBACK:
+            log.info("❌ AI R:R too low for %s — R:R=%.2f < %.2f", symbol, rr, config.MIN_RR_FALLBACK)
+            return
+
+        # Use the best strategy name from detected patterns or AI's own label
+        strategy_name = ai_decision.get("strategy_used", "ai_proactive")
+        if strategy_signals:
+            strategy_name = strategy_signals[0]["strategy"]
+
+        log.info(
+            "✅ Proactive AI approved %s [%s] entry=%.6g sl=%.6g tp=%.6g R:R=%.2f lev=%d×",
+            symbol, direction, entry_price, raw_sl, raw_tp, rr, ai_decision.get("leverage", 1),
+        )
+
+        conf_candle = candles[-2] if len(candles) > 1 else candles[-1]
+        swing_tp    = None  # AI already set TP directly
 
         await self._execute_limit_buy(
             symbol=symbol,
-            conf_candle=best_conf_candle,
+            conf_candle=conf_candle,
             atr=atr,
-            swing_tp=best_swing_tp,
-            target_sl=best_sl,
-            target_tp=best_tp,
-            strategy=strategy,
-            direction=best_sig.get("direction", "long"),
-            leverage=best_decision.get("leverage", 1),
-            confidence=best_decision.get("confidence", 0.0),
+            swing_tp=swing_tp,
+            target_sl=raw_sl,
+            target_tp=raw_tp,
+            strategy=strategy_name,
+            direction=direction,
+            leverage=ai_decision.get("leverage", 1),
+            confidence=ai_decision.get("confidence", 0.0),
         )
+        return
 
     # ── FIX #9 — Limit buy with fill tracking ────────────────────────────────
     async def _execute_limit_buy(

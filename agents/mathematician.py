@@ -35,6 +35,11 @@ from utils.indicators import (
     market_regime,
     calc_vwap,
     calc_atr,
+    calc_rsi,
+    calc_adx_full,
+    calc_ema,
+    calc_bollinger_bands,
+    calc_stoch_rsi,
     detect_ema_cross,
     is_ema_bullish_stack,
     detect_bullish_engulfing,
@@ -348,6 +353,154 @@ class MathematicianAgent:
             self._states[key] = WatcherState(symbol=symbol, timeframe=timeframe)
         return self._states[key]
 
+    def build_market_snapshot(
+        self,
+        candles: List[Dict],
+        df:      pd.DataFrame,
+    ) -> Dict:
+        """
+        Builds a comprehensive technical snapshot of the market for AI analysis.
+        Always runs on every candle — no pattern conditions required.
+        The AI uses this to decide whether and where to trade proactively.
+        """
+        snapshot: Dict = {}
+        try:
+            close = df["close"].astype(float)
+            current_price = float(close.iloc[-1])
+
+            # ── EMAs ──────────────────────────────────────────────────────────
+            ema9   = float(calc_ema(close, 9).iloc[-1])
+            ema21  = float(calc_ema(close, 21).iloc[-1])
+            ema50  = float(calc_ema(close, 50).iloc[-1])
+            ema200 = float(calc_ema(close, 200).iloc[-1])
+
+            # ── Momentum indicators ───────────────────────────────────────────
+            rsi7   = calc_rsi(df, 7)
+            rsi14  = calc_rsi(df, 14)
+            adx, di_plus, di_minus = calc_adx_full(df)
+            stoch_k, stoch_d = calc_stoch_rsi(df)
+
+            # ── VWAP ──────────────────────────────────────────────────────────
+            vwap = calc_vwap(df)
+
+            # ── ATR ───────────────────────────────────────────────────────────
+            atr = calc_atr(df)
+            atr_pct = atr / current_price * 100 if current_price > 0 else 0.0
+
+            # ── Bollinger Bands ───────────────────────────────────────────────
+            bb_upper, bb_mid, bb_lower = calc_bollinger_bands(df)
+            bb_pos = (
+                (current_price - bb_lower) / (bb_upper - bb_lower)
+                if bb_upper != bb_lower else 0.5
+            )
+
+            # ── Volume ────────────────────────────────────────────────────────
+            last_closed = candles[-2] if len(candles) > 1 else candles[-1]
+            vol_rat = volume_ratio(last_closed, df)
+
+            # ── Patterns ──────────────────────────────────────────────────────
+            ema_cross_up   = detect_ema_cross(df, 9, 21)
+            ema_cross_down = detect_ema_cross_down(df, 9, 21)
+            bull_engulf    = detect_bullish_engulfing(candles[:-1])
+            bear_engulf    = detect_bearish_engulfing(candles[:-1])
+
+            # ── Structure ─────────────────────────────────────────────────────
+            pivot_highs = find_pivot_highs(candles)
+            pivot_lows  = find_pivot_lows(candles)
+            resistances = sorted(
+                [h.high for h in pivot_highs if h.high > current_price * 1.001]
+            )[:3]
+            supports = sorted(
+                [l.low for l in pivot_lows if l.low < current_price * 0.999],
+                reverse=True,
+            )[:3]
+
+            # ── 3-candle momentum ─────────────────────────────────────────────
+            last3 = [float(candles[-(i + 2)]["close"]) for i in range(3) if len(candles) > i + 2]
+            mom_up   = len(last3) >= 3 and last3[0] > last3[1] > last3[2]
+            mom_down = len(last3) >= 3 and last3[0] < last3[1] < last3[2]
+
+            # ── Recent candles (last 5 closed) ────────────────────────────────
+            recent_candles = []
+            for c in candles[-6:-1]:
+                body = abs(c["close"] - c["open"])
+                rng  = c["high"] - c["low"]
+                recent_candles.append({
+                    "open":     round(c["open"],  8),
+                    "high":     round(c["high"],  8),
+                    "low":      round(c["low"],   8),
+                    "close":    round(c["close"], 8),
+                    "volume":   round(c["volume"], 2),
+                    "dir":      "bull" if c["close"] > c["open"] else "bear",
+                    "body_pct": round(body / c["open"] * 100, 3) if c["open"] > 0 else 0,
+                    "wick_ratio": round((rng - body) / rng, 3) if rng > 0 else 0,
+                })
+
+            # ── Regime ────────────────────────────────────────────────────────
+            import config as _cfg
+            threshold = getattr(_cfg, "ADX_TREND_THRESHOLD", 20)
+            if adx >= threshold:
+                regime = "trending_up" if di_plus > di_minus else "trending_down"
+            else:
+                regime = "ranging"
+
+            snapshot = {
+                "price": {
+                    "current":     round(current_price, 8),
+                    "ema9":        round(ema9, 8),
+                    "ema21":       round(ema21, 8),
+                    "ema50":       round(ema50, 8),
+                    "ema200":      round(ema200, 8),
+                    "vwap":        round(vwap, 8) if vwap > 0 else None,
+                    "bb_upper":    round(bb_upper, 8),
+                    "bb_lower":    round(bb_lower, 8),
+                    "bb_position": round(bb_pos, 3),   # 0=at lower band, 1=at upper band
+                    "above_vwap":  current_price > vwap if vwap > 0 else None,
+                    "above_ema50": current_price > ema50,
+                    "above_ema200": current_price > ema200,
+                    "pct_from_ema9":  round((current_price - ema9)  / ema9  * 100, 3) if ema9  > 0 else 0,
+                    "pct_from_ema50": round((current_price - ema50) / ema50 * 100, 3) if ema50 > 0 else 0,
+                },
+                "momentum": {
+                    "rsi7":     round(rsi7,    2),
+                    "rsi14":    round(rsi14,   2),
+                    "stoch_k":  round(stoch_k, 2),
+                    "stoch_d":  round(stoch_d, 2),
+                    "adx":      round(adx,     1),
+                    "di_plus":  round(di_plus, 1),
+                    "di_minus": round(di_minus, 1),
+                    "regime":   regime,
+                },
+                "ema_signals": {
+                    "bullish_stack":   bool(ema9 > ema21 > ema50),
+                    "bearish_stack":   bool(ema9 < ema21 < ema50),
+                    "cross_up_9_21":   bool(ema_cross_up),
+                    "cross_down_9_21": bool(ema_cross_down),
+                },
+                "patterns": {
+                    "bull_engulfing": bool(bull_engulf),
+                    "bear_engulfing": bool(bear_engulf),
+                    "momentum_3c_up":   bool(mom_up),
+                    "momentum_3c_down": bool(mom_down),
+                },
+                "volume": {
+                    "ratio":     round(vol_rat, 3),
+                    "above_avg": bool(vol_rat >= 1.3),
+                },
+                "atr": {
+                    "value": round(atr, 8),
+                    "pct":   round(atr_pct, 4),
+                },
+                "structure": {
+                    "nearest_resistance": [round(r, 8) for r in resistances[:2]],
+                    "nearest_support":    [round(s, 8) for s in supports[:2]],
+                },
+                "recent_candles": recent_candles,
+            }
+        except Exception as exc:
+            log.warning("build_market_snapshot failed: %s", exc)
+        return snapshot
+
     async def process(
         self,
         symbol:    str,
@@ -386,6 +539,7 @@ class MathematicianAgent:
             "swing_tp_target":     None,
             "vol_ratio":           1.0,
             "strategy_signals":    [],
+            "market_snapshot":     {},
         }
 
         if len(candles) < 2 * config.PIVOT_N + 5:
@@ -697,5 +851,8 @@ class MathematicianAgent:
                             "vol_ratio":           vol_rat,
                         })
                         log.info("🎯 MOMENTUM SHORT: %s broke_low=%.6g tp=%.6g", symbol, structure_low, tp_p)
+
+        # ── Always build market snapshot for proactive AI analysis ────────────
+        result["market_snapshot"] = self.build_market_snapshot(candles, df)
 
         return result
