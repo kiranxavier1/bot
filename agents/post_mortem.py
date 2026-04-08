@@ -274,11 +274,10 @@ Output ONLY valid JSON:
                 )
             )
             raw = response.text.strip()
-            if "```" in raw:
-                start = raw.find("{")
-                end = raw.rfind("}") + 1
-                if start != -1 and end > start:
-                    raw = raw[start:end]
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start != -1 and end > start:
+                raw = raw[start:end]
 
             analysis = json.loads(raw)
             full_analysis = {
@@ -349,11 +348,10 @@ Output ONLY valid JSON:
                 )
             )
             raw = response.text.strip()
-            if "```" in raw:
-                start = raw.find("{")
-                end = raw.rfind("}") + 1
-                if start != -1 and end > start:
-                    raw = raw[start:end]
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start != -1 and end > start:
+                raw = raw[start:end]
 
             analysis = json.loads(raw)
             full_analysis = {

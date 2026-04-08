@@ -445,12 +445,10 @@ class AIManager:
     @staticmethod
     def _parse_decision(text: str) -> Dict[str, Any]:
         """Extract and validate the JSON block from Gemini's response."""
-        # Strip optional markdown code fences
-        if "```" in text:
-            start = text.find("{")
-            end   = text.rfind("}") + 1
-            if start != -1 and end > start:
-                text = text[start:end]
+        start = text.find("{")
+        end   = text.rfind("}") + 1
+        if start != -1 and end > start:
+            text = text[start:end]
 
         try:
             data = json.loads(text)
@@ -561,11 +559,10 @@ class AIManager:
             )
             raw_text = response.text.strip()
             
-            if "```" in raw_text:
-                start = raw_text.find("{")
-                end   = raw_text.rfind("}") + 1
-                if start != -1 and end > start:
-                    raw_text = raw_text[start:end]
+            start = raw_text.find("{")
+            end   = raw_text.rfind("}") + 1
+            if start != -1 and end > start:
+                raw_text = raw_text[start:end]
                 
             if not raw_text.strip():
                 return {}
@@ -578,11 +575,10 @@ class AIManager:
     @staticmethod
     def _parse_proactive_decision(text: str) -> Dict[str, Any]:
         """Parse the proactive AI response (TRADE/PASS with full SL/TP)."""
-        if "```" in text:
-            start = text.find("{")
-            end   = text.rfind("}") + 1
-            if start != -1 and end > start:
-                text = text[start:end]
+        start = text.find("{")
+        end   = text.rfind("}") + 1
+        if start != -1 and end > start:
+            text = text[start:end]
 
         try:
             data = json.loads(text)
