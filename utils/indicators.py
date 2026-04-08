@@ -168,8 +168,25 @@ def price_above_ema200(df_htf: pd.DataFrame, period: int = None) -> bool:
                   period, close.iloc[-1], ema.iloc[-1], result)
         return result
     except Exception as exc:
-        log.warning("EMA-200 filter failed: %s — defaulting to True", exc)
         return True   # fail-open: don't block on calculation error
+
+
+def price_below_ema200(df_htf: pd.DataFrame, period: int = None) -> bool:
+    """
+    Returns True if the coin's latest close is below its EMA-200 on the
+    higher timeframe (1h). This ensures we only short in macro downtrends.
+    """
+    period = period or config.HTF_EMA_PERIOD
+    try:
+        close = df_htf["close"].astype(float)
+        ema   = calc_ema(close, period)
+        result = float(close.iloc[-1]) < float(ema.iloc[-1])
+        log.debug("EMA%d filter (short): close=%.6g ema=%.6g → %s",
+                  period, close.iloc[-1], ema.iloc[-1], result)
+        return result
+    except Exception as exc:
+        log.warning("EMA-200 short filter failed: %s — defaulting to True", exc)
+        return True   # fail-open
 
 
 # ── Volume confirmation ratio (FIX #1) ───────────────────────────────────────
@@ -545,6 +562,25 @@ def detect_ema_cross(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> bool:
         return False
 
 
+def detect_ema_cross_down(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> bool:
+    """
+    True when fast EMA crossed BELOW slow EMA on the most recent closed candle.
+    Used for short entries.
+    """
+    try:
+        close = df["close"].astype(float)
+        if len(close) < slow + 2:
+            return False
+        fast_ema = calc_ema(close, fast)
+        slow_ema = calc_ema(close, slow)
+        # Previous bar: fast was above slow; current bar: fast is below slow
+        crossed = (fast_ema.iloc[-2] > slow_ema.iloc[-2]) and (fast_ema.iloc[-1] < slow_ema.iloc[-1])
+        return bool(crossed)
+    except Exception as exc:
+        log.warning("EMA cross down detection failed: %s", exc)
+        return False
+
+
 def is_ema_bullish_stack(df: pd.DataFrame, periods: tuple = (9, 21, 50)) -> bool:
     """
     True when EMAs are fully bullishly stacked: EMA9 > EMA21 > EMA50.
@@ -558,6 +594,22 @@ def is_ema_bullish_stack(df: pd.DataFrame, periods: tuple = (9, 21, 50)) -> bool
         return vals[0] > vals[1] > vals[2]
     except Exception as exc:
         log.warning("EMA stack check failed: %s", exc)
+        return False
+
+
+def is_ema_bearish_stack(df: pd.DataFrame, periods: tuple = (9, 21, 50)) -> bool:
+    """
+    True when EMAs are fully bearishly stacked: EMA9 < EMA21 < EMA50.
+    Confirms strong downtrend momentum for shorts.
+    """
+    try:
+        close = df["close"].astype(float)
+        if len(close) < max(periods) + 2:
+            return False
+        vals = [float(calc_ema(close, p).iloc[-1]) for p in periods]
+        return vals[0] < vals[1] < vals[2]
+    except Exception as exc:
+        log.warning("EMA bearish stack check failed: %s", exc)
         return False
 
 
@@ -584,6 +636,27 @@ def detect_bullish_engulfing(candles: list) -> bool:
         return False
 
 
+def detect_bearish_engulfing(candles: list) -> bool:
+    """
+    True when the last closed candle is a bearish engulfing pattern:
+    previous candle is bullish, current candle is bearish AND fully engulfs it.
+    """
+    try:
+        if len(candles) < 2:
+            return False
+        prev = candles[-2]
+        curr = candles[-1]
+        prev_bullish = float(prev["close"]) > float(prev["open"])
+        curr_bearish = float(curr["close"]) < float(curr["open"])
+        # Current candle body fully engulfs previous candle body
+        engulfs = (float(curr["close"]) <= float(prev["open"]) and
+                   float(curr["open"]) >= float(prev["close"]))
+        return bool(prev_bullish and curr_bearish and engulfs)
+    except Exception as exc:
+        log.warning("Bearish engulfing detection failed: %s", exc)
+        return False
+
+
 def price_above_vwap(df: pd.DataFrame) -> bool:
     """
     True if the latest close is above the rolling VWAP.
@@ -596,6 +669,21 @@ def price_above_vwap(df: pd.DataFrame) -> bool:
         return float(df["close"].iloc[-1]) > vwap
     except Exception as exc:
         log.warning("VWAP direction check failed: %s", exc)
+        return True
+
+
+def price_below_vwap(df: pd.DataFrame) -> bool:
+    """
+    True if the latest close is below the rolling VWAP.
+    Institutional sell-side bias — take shorts in this state.
+    """
+    try:
+        vwap = calc_vwap(df)
+        if vwap <= 0:
+            return True   # fail-open
+        return float(df["close"].iloc[-1]) < vwap
+    except Exception as exc:
+        log.warning("VWAP below check failed: %s", exc)
         return True
 
 
@@ -613,6 +701,18 @@ def rsi_above_midline(df: pd.DataFrame, period: int = 7) -> bool:
         return True   # fail-open
 
 
+def rsi_below_midline(df: pd.DataFrame, period: int = 7) -> bool:
+    """
+    True when RSI-7 is below 50. Used for fast downtrend filtering.
+    """
+    try:
+        rsi = calc_rsi(df, period=period)
+        return rsi < 50.0
+    except Exception as exc:
+        log.warning("RSI midline check failed: %s", exc)
+        return True   # fail-open
+
+
 def is_prime_session() -> bool:
     """
     True during active trading hours: 06:00-20:00 UTC.
@@ -625,6 +725,108 @@ def is_prime_session() -> bool:
         hour = datetime.now(timezone.utc).hour
         return 6 <= hour < 20
     except Exception:
+        return True   # fail-open
+
+
+def is_weekday() -> bool:
+    """
+    True Mon–Fri UTC.  Saturday and Sunday have significantly lower crypto
+    volume and a higher proportion of false breakouts — skip new entries.
+    """
+    try:
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).weekday() < 5   # 0=Mon … 4=Fri
+    except Exception:
+        return True   # fail-open
+
+
+def btc_is_dropping(df_btc: pd.DataFrame, drop_pct: float = 0.5, candles: int = 3) -> bool:
+    """
+    True if BTC has dropped more than `drop_pct` % over the last `candles` closed candles.
+    Used as a macro crash filter — during a sharp BTC sell-off, all long entries
+    are paused regardless of individual setup quality.
+
+    df_btc must be the BTC 15m candle DataFrame.
+    Returns False (safe to trade) if BTC data is unavailable.
+    """
+    try:
+        if df_btc is None or len(df_btc) < candles + 1:
+            return False
+        closes = df_btc["close"].astype(float)
+        recent_high = float(closes.iloc[-candles - 1])   # close before the window
+        current     = float(closes.iloc[-1])
+        if recent_high <= 0:
+            return False
+        pct_drop = (recent_high - current) / recent_high * 100
+        if pct_drop >= drop_pct:
+            log.debug("BTC sharp-drop filter: %.2f%% drop in last %d candles", pct_drop, candles)
+            return True
+        return False
+    except Exception as exc:
+        log.warning("BTC drop check failed: %s", exc)
+        return False
+
+
+def btc_is_rising(df_btc: pd.DataFrame, rise_pct: float = 0.5, candles: int = 3) -> bool:
+    """
+    True if BTC has risen more than `rise_pct` % over the last `candles` closed candles.
+    Used as a macro filter — pauses short entries during a sharp BTC rally.
+    """
+    try:
+        if df_btc is None or len(df_btc) < candles + 1:
+            return False
+        closes = df_btc["close"].astype(float)
+        recent_low = float(closes.iloc[-candles - 1])
+        current    = float(closes.iloc[-1])
+        if recent_low <= 0:
+            return False
+        pct_rise = (current - recent_low) / recent_low * 100
+        if pct_rise >= rise_pct:
+            log.debug("BTC sharp-rise filter: %.2f%% rise in last %d candles", pct_rise, candles)
+            return True
+        return False
+    except Exception as exc:
+        log.warning("BTC rise check failed: %s", exc)
+        return False
+
+
+def candle_close_strength(candle: dict) -> bool:
+    """
+    True when the candle closes in the upper 50% of its high-low range.
+    Measures buyer commitment: a candle that closes near its high shows
+    sustained buying pressure and is a stronger entry signal.
+    Returns True on error (fail-open).
+    """
+    try:
+        high  = float(candle["high"])
+        low   = float(candle["low"])
+        close = float(candle["close"])
+        rng = high - low
+        if rng <= 0:
+            return True   # doji / no range — fail-open
+        position = (close - low) / rng   # 0.0 = closes at low, 1.0 = closes at high
+        return position >= 0.5
+    except Exception as exc:
+        log.warning("Candle close strength check failed: %s", exc)
+        return True   # fail-open
+
+
+def candle_close_weakness(candle: dict) -> bool:
+    """
+    True when the candle closes in the lower 50% of its high-low range.
+    Measures seller commitment.
+    """
+    try:
+        high  = float(candle["high"])
+        low   = float(candle["low"])
+        close = float(candle["close"])
+        rng = high - low
+        if rng <= 0:
+            return True   # doji / no range — fail-open
+        position = (close - low) / rng   # 0.0 = closes at low, 1.0 = closes at high
+        return position <= 0.5
+    except Exception as exc:
+        log.warning("Candle close weakness check failed: %s", exc)
         return True   # fail-open
 
 

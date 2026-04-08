@@ -40,6 +40,11 @@ from utils.indicators import (
     detect_bullish_engulfing,
     price_above_vwap,
     rsi_above_midline,
+    detect_ema_cross_down,
+    is_ema_bearish_stack,
+    detect_bearish_engulfing,
+    price_below_vwap,
+    rsi_below_midline,
 )
 
 log = logging.getLogger(__name__)
@@ -285,6 +290,48 @@ def find_swing_tp_target(
     return target
 
 
+def find_swing_tp_target_short(
+    candles: List[Dict],
+    entry_price: float,
+    stop_loss: float,
+) -> Optional[float]:
+    """
+    USER INSIGHT (Shorts): use the previous swing low as TP target.
+    """
+    lows = find_pivot_lows(candles)
+    if not lows:
+        return None
+
+    # Filter to lows below entry (need space to reach them)
+    candidates = [l for l in lows if l.low < entry_price * 0.995]
+    if not candidates:
+        return None
+
+    # Take the nearest (highest) candidate
+    nearest = max(candidates, key=lambda l: l.low)
+    target  = nearest.low * (1 - config.SWING_TP_BUFFER)
+
+    # Validate R:R
+    sl_dist = stop_loss - entry_price
+    tp_dist = entry_price - target
+    if sl_dist <= 0 or tp_dist <= 0:
+        return None
+
+    rr = tp_dist / sl_dist
+    if rr < config.MIN_RR_FALLBACK:
+        log.debug(
+            "Swing TP short rejected: R:R=%.2f < %.2f minimum (target=%.6g)",
+            rr, config.MIN_RR_FALLBACK, target,
+        )
+        return None
+
+    log.info(
+        "🎯 Swing TP short target: %.6g (R:R=%.2f, previous low=%.6g)",
+        target, rr, nearest.low,
+    )
+    return target
+
+
 # ── Stateful Mathematician Agent ──────────────────────────────────────────────
 
 class MathematicianAgent:
@@ -409,6 +456,10 @@ class MathematicianAgent:
         _above_vwap = price_above_vwap(df)     # price above VWAP
         _atr        = calc_atr(df)             # used for tight ATR-based TPs on scalps
 
+        _rsi_bear   = rsi_below_midline(df)
+        _ema_bear   = is_ema_bearish_stack(df)
+        _below_vwap = price_below_vwap(df)
+
         # ── Strategy 1: Trendline Bounce (SWING) ──────────────────────────────
         # Swing trade: use SWING_RR (2x) — wider TP suits the longer move.
         if state.armed and _rsi_ok and _ema_stack:
@@ -429,6 +480,7 @@ class MathematicianAgent:
                 result["swing_tp_target"] = swing_tp
                 result["strategy_signals"].append({
                     "strategy":            "bounce",
+                    "direction":           "long",
                     "entry_price":         entry_p,
                     "stop_loss":           sl_p,
                     "take_profit":         tp_p,
@@ -464,6 +516,7 @@ class MathematicianAgent:
                         tp_p    = entry_p + (entry_p - sl_p) * config.SWING_RR
                         result["strategy_signals"].append({
                             "strategy":            "breakout",
+                            "direction":           "long",
                             "entry_price":         entry_p,
                             "stop_loss":           sl_p,
                             "take_profit":         tp_p,
@@ -494,6 +547,7 @@ class MathematicianAgent:
                             tp_p    = entry_p + atr_tp
                             result["strategy_signals"].append({
                                 "strategy":            "vwap_bounce",
+                                "direction":           "long",
                                 "entry_price":         entry_p,
                                 "stop_loss":           sl_p,
                                 "take_profit":         tp_p,
@@ -522,6 +576,7 @@ class MathematicianAgent:
                     if sl_p < entry_p and tp_p > entry_p:
                         result["strategy_signals"].append({
                             "strategy":            "ema_cross",
+                            "direction":           "long",
                             "entry_price":         entry_p,
                             "stop_loss":           sl_p,
                             "take_profit":         tp_p,
@@ -553,6 +608,7 @@ class MathematicianAgent:
                     if sl_p < entry_p and tp_p > entry_p:
                         result["strategy_signals"].append({
                             "strategy":            "momentum_scalp",
+                            "direction":           "long",
                             "entry_price":         entry_p,
                             "stop_loss":           sl_p,
                             "take_profit":         tp_p,
@@ -565,5 +621,81 @@ class MathematicianAgent:
                             "🎯 MOMENTUM SCALP: %s broke=%.6g tp=%.6g vol=%.2f engulf=%s",
                             symbol, structure_high, tp_p, vol_rat, is_engulfing,
                         )
+
+        # ── Strategy 6: VWAP Reject (SHORT SCALP) ─────────────────────────────
+        if _rsi_bear and _ema_bear:
+            vwap = calc_vwap(df)
+            if vwap > 0:
+                last_closed = candles[-2] if len(candles) > 1 else live_candle
+                is_engulfing = detect_bearish_engulfing(candles[:-1])
+                if is_engulfing and last_closed["high"] >= vwap * 0.999 and last_closed["close"] < vwap:
+                    vol_rat = volume_ratio(last_closed, df)
+                    if vol_rat >= config.VWAP_VOLUME_MULTIPLIER:
+                        entry_p = float(last_closed["close"])
+                        sl_p    = float(vwap * (1 + 0.005))
+                        atr_tp  = (_atr * config.SCALP_TP_ATR_MULT) if _atr > 0 else (sl_p - entry_p) * config.MIN_RR_FALLBACK
+                        tp_p    = entry_p - atr_tp
+                        result["strategy_signals"].append({
+                            "strategy":            "vwap_reject_short",
+                            "direction":           "short",
+                            "entry_price":         entry_p,
+                            "stop_loss":           sl_p,
+                            "take_profit":         tp_p,
+                            "confirmation_candle": last_closed,
+                            "vwap":                vwap,
+                            "vol_ratio":           vol_rat,
+                            "engulfing":           is_engulfing,
+                        })
+                        log.info("🎯 VWAP REJECT SHORT: %s close=%.6g sl=%.6g tp=%.6g", symbol, entry_p, sl_p, tp_p)
+
+        # ── Strategy 7: EMA 9/21 Cross Down (SHORT SCALP) ─────────────────────
+        if _rsi_bear and _below_vwap:
+            if detect_ema_cross_down(df, fast=9, slow=21):
+                last_closed = candles[-2] if len(candles) > 1 else live_candle
+                vol_rat = volume_ratio(last_closed, df)
+                if vol_rat >= config.VOLUME_CONFIRM_MULTIPLIER:
+                    entry_p    = float(last_closed["close"])
+                    recent_highs = [candles[-i]["high"] for i in range(2, min(6, len(candles)))]
+                    sl_p       = float(max(recent_highs) * 1.001) if recent_highs else entry_p * 1.005
+                    atr_tp     = (_atr * config.SCALP_TP_ATR_MULT) if _atr > 0 else (sl_p - entry_p) * config.MIN_RR_FALLBACK
+                    tp_p       = entry_p - atr_tp
+                    if sl_p > entry_p and tp_p < entry_p:
+                        result["strategy_signals"].append({
+                            "strategy":            "ema_cross_short",
+                            "direction":           "short",
+                            "entry_price":         entry_p,
+                            "stop_loss":           sl_p,
+                            "take_profit":         tp_p,
+                            "confirmation_candle": last_closed,
+                            "vol_ratio":           vol_rat,
+                        })
+                        log.info("🎯 EMA CROSS SHORT: %s close=%.6g sl=%.6g tp=%.6g", symbol, entry_p, sl_p, tp_p)
+
+        # ── Strategy 8: Momentum Candle Breakout Down (SHORT SCALP) ───────────
+        if _rsi_bear and _below_vwap and len(candles) >= 6:
+            c1             = candles[-2]
+            prev_lows      = [candles[-i]["low"] for i in range(3, 6)]
+            structure_low  = min(prev_lows)
+            
+            if c1["close"] < structure_low and c1["close"] < c1["open"]:
+                vol_rat = volume_ratio(c1, df)
+                if vol_rat >= config.VOLUME_CONFIRM_MULTIPLIER * 1.3:
+                    structure_high = max(candles[-i]["high"] for i in range(3, 6))
+                    entry_p = float(c1["close"])
+                    sl_p    = float(structure_high * 1.001)
+                    atr_tp  = (_atr * config.SCALP_TP_ATR_MULT) if _atr > 0 else (sl_p - entry_p) * config.MIN_RR_FALLBACK
+                    tp_p    = entry_p - atr_tp
+                    if sl_p > entry_p and tp_p < entry_p:
+                        result["strategy_signals"].append({
+                            "strategy":            "momentum_short",
+                            "direction":           "short",
+                            "entry_price":         entry_p,
+                            "stop_loss":           sl_p,
+                            "take_profit":         tp_p,
+                            "confirmation_candle": c1,
+                            "structure_low":       structure_low,
+                            "vol_ratio":           vol_rat,
+                        })
+                        log.info("🎯 MOMENTUM SHORT: %s broke_low=%.6g tp=%.6g", symbol, structure_low, tp_p)
 
         return result

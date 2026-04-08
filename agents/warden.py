@@ -35,7 +35,7 @@ import pandas as pd
 
 import config
 import pandas as pd
-from agents.mathematician import find_pivot_lows
+from agents.mathematician import find_pivot_lows, find_pivot_highs
 from utils.indicators import calc_atr
 from web.state import bot_state
 
@@ -54,6 +54,7 @@ class Position:
     strategy:     str = "bounce"
     leverage:     int = 1
     is_futures:   bool = False
+    direction:    str = "long"
     entry_ts:     float = field(default_factory=time.time)  # seconds epoch
     be_activated: bool  = False  # True once SL has passed entry price
     # Tracks the highest close seen since entry — used for ATR trailing SL
@@ -192,6 +193,45 @@ def find_structural_sl_from_df(
     return entry_price - atr * config.ATR_MULTIPLIER
 
 
+def find_structural_sl_short_from_df(
+    df_htf:      pd.DataFrame,
+    entry_price: float,
+    atr:         float,
+    n:           int = 3,
+) -> float:
+    """
+    Structural SL for shorts. Anchored above recent pivot highs.
+    """
+    try:
+        if df_htf is None or len(df_htf) < 2 * n + 5 or atr <= 0:
+            return entry_price + atr * config.ATR_MULTIPLIER
+
+        candles = df_htf.tail(40).to_dict("records")
+        pivots  = find_pivot_highs(candles, n=n)
+
+        max_dist   = entry_price * 0.06
+        candidates = [
+            p.high for p in pivots
+            if p.high > entry_price and (p.high - entry_price) <= max_dist
+        ]
+
+        if candidates:
+            best_pivot   = min(candidates)       # lowest pivot above entry
+            structural   = best_pivot * (1.0 + config.STRUCTURAL_SL_BUFFER)
+            atr_floor    = entry_price + atr * config.SL_MIN_ATR_MULT
+            result       = max(structural, atr_floor)  # take wider (higher) stop
+            log.debug(
+                "Structural SL short: pivot=%.6g → sl=%.6g  (atr_floor=%.6g)",
+                best_pivot, result, atr_floor,
+            )
+            return result
+
+    except Exception as exc:
+        log.warning("Structural SL short calculation failed: %s — falling back to ATR SL", exc)
+
+    return entry_price + atr * config.ATR_MULTIPLIER
+
+
 def calculate_stop_loss_atr(
     entry_price: float,
     atr:         float,
@@ -301,6 +341,7 @@ class WardenAgent:
                     strategy=data.get("strategy", "unknown"),
                     leverage=data.get("leverage", 1),
                     is_futures=data.get("is_futures", config.USE_FUTURES),
+                    direction=data.get("direction", "long"),
                     entry_ts=data.get("opened_at", time.time()),
                     be_activated=data.get("be_activated", False),
                     highest_close_since_entry=data.get("entry", 0.0),
@@ -341,6 +382,7 @@ class WardenAgent:
         strategy:    str = "bounce",
         leverage:    int = 1,
         is_futures:  bool = False,
+        direction:   str = "long",
     ) -> Position:
         pos = Position(
             symbol=symbol,
@@ -351,6 +393,7 @@ class WardenAgent:
             strategy=strategy,
             leverage=leverage,
             is_futures=is_futures,
+            direction=direction,
             highest_close_since_entry=entry_price,
         )
         self._positions[symbol] = pos
@@ -371,6 +414,7 @@ class WardenAgent:
             strategy=strategy,
             leverage=leverage,
             is_futures=is_futures,
+            direction=direction,
             sl_order_id=pos.sl_order_id,
             tp_order_id=pos.tp_order_id,
         ))
@@ -408,6 +452,14 @@ class WardenAgent:
         n = max(2, min(config.PIVOT_N, len(post_entry) // 3))
         if len(post_entry) < 2 * n + 1:
             return None
+
+        if pos.direction == "short":
+            pivots = find_pivot_highs(post_entry, n=n)
+            if not pivots: return None
+            candidates = [p for p in pivots if p.high < pos.stop_loss]
+            if not candidates: return None
+            best = max(candidates, key=lambda p: p.index)
+            return best.high * (1.0 + 0.001)
 
         pivots = find_pivot_lows(post_entry, n=n)
         if not pivots:
@@ -449,14 +501,20 @@ class WardenAgent:
             return None
 
         # ── Stop Loss (FIX #4: ATR-based SL was set at entry) ────────────────
-        if latest_low <= pos.stop_loss:
+        sl_hit = (latest_high >= pos.stop_loss) if pos.direction == "short" else (latest_low <= pos.stop_loss)
+        if sl_hit:
             # Realised P&L (negative for a loss)
-            pnl_usdt = (pos.stop_loss - pos.entry_price) * pos.quantity
+            if pos.direction == "short":
+                pnl_usdt = (pos.entry_price - pos.stop_loss) * pos.quantity
+            else:
+                pnl_usdt = (pos.stop_loss - pos.entry_price) * pos.quantity
+                
             self.daily_loss.record_trade_pnl(pnl_usdt)
 
             log.warning(
-                "❌ SL HIT: %s low=%.6g ≤ sl=%.6g | pnl=%+.2f USDT | %s",
-                symbol, latest_low, pos.stop_loss, pnl_usdt,
+                "❌ SL HIT: %s %.6g %s %.6g | pnl=%+.2f USDT | %s",
+                symbol, latest_high if pos.direction == "short" else latest_low,
+                ">=" if pos.direction == "short" else "<=", pos.stop_loss, pnl_usdt,
                 self.daily_loss.summary,
             )
 
@@ -476,13 +534,19 @@ class WardenAgent:
             return "SL"
 
         # ── Take Profit ──────────────────────────────────────────────────────
-        if latest_high >= pos.take_profit:
-            pnl_usdt = (pos.take_profit - pos.entry_price) * pos.quantity
+        tp_hit = (latest_low <= pos.take_profit) if pos.direction == "short" else (latest_high >= pos.take_profit)
+        if tp_hit:
+            if pos.direction == "short":
+                pnl_usdt = (pos.entry_price - pos.take_profit) * pos.quantity
+            else:
+                pnl_usdt = (pos.take_profit - pos.entry_price) * pos.quantity
+                
             self.daily_loss.record_trade_pnl(pnl_usdt)
 
             log.info(
-                "✅ TP HIT: %s high=%.6g ≥ tp=%.6g | pnl=%+.2f USDT | %s",
-                symbol, latest_high, pos.take_profit, pnl_usdt,
+                "✅ TP HIT: %s %.6g %s %.6g | pnl=%+.2f USDT | %s",
+                symbol, latest_low if pos.direction == "short" else latest_high,
+                "<=" if pos.direction == "short" else ">=", pos.take_profit, pnl_usdt,
                 self.daily_loss.summary,
             )
 
@@ -515,28 +579,43 @@ class WardenAgent:
                     log.debug("ATR trail calc failed for %s: %s", symbol, _exc)
 
             # Check activation: must be sufficiently in profit before trailing starts
-            activation_threshold = pos.entry_price + trail_atr * config.TSL_ACTIVATION_ATR_MULT
-            tsl_active = (trail_atr <= 0) or (latest_close >= activation_threshold)
+            if pos.direction == "short":
+                activation_threshold = pos.entry_price - trail_atr * config.TSL_ACTIVATION_ATR_MULT
+                tsl_active = (trail_atr <= 0) or (latest_close <= activation_threshold)
+            else:
+                activation_threshold = pos.entry_price + trail_atr * config.TSL_ACTIVATION_ATR_MULT
+                tsl_active = (trail_atr <= 0) or (latest_close >= activation_threshold)
 
             if tsl_active:
                 # ── ATR trail ──────────────────────────────────────────────
                 if trail_atr > 0:
-                    pos.highest_close_since_entry = max(
-                        pos.highest_close_since_entry, latest_close
-                    )
-                    atr_trail  = pos.highest_close_since_entry - trail_atr * config.TSL_ATR_MULTIPLIER
-                    best_trail = max(best_trail, atr_trail)
+                    if pos.direction == "short":
+                        pos.highest_close_since_entry = min(
+                            pos.highest_close_since_entry, latest_close
+                        ) if pos.highest_close_since_entry > 0 else latest_close
+                        atr_trail = pos.highest_close_since_entry + trail_atr * config.TSL_ATR_MULTIPLIER
+                        best_trail = min(best_trail, atr_trail)
+                    else:
+                        pos.highest_close_since_entry = max(
+                            pos.highest_close_since_entry, latest_close
+                        )
+                        atr_trail  = pos.highest_close_since_entry - trail_atr * config.TSL_ATR_MULTIPLIER
+                        best_trail = max(best_trail, atr_trail)
 
                 # ── Structure trail ─────────────────────────────────────────
                 struct_sl = self._find_structure_sl(pos, candles)
                 if struct_sl:
-                    best_trail = max(best_trail, struct_sl)
+                    if pos.direction == "short":
+                        best_trail = min(best_trail, struct_sl)
+                    else:
+                        best_trail = max(best_trail, struct_sl)
 
                 # ── Apply if improved ───────────────────────────────────────
-                if best_trail > pos.stop_loss:
+                improved = (best_trail < pos.stop_loss) if pos.direction == "short" else (best_trail > pos.stop_loss)
+                if improved:
                     old_sl        = pos.stop_loss
                     pos.stop_loss = best_trail
-                    is_be         = best_trail >= pos.entry_price
+                    is_be         = (best_trail <= pos.entry_price) if pos.direction == "short" else (best_trail >= pos.entry_price)
 
                     if is_be:
                         pos.be_activated = True

@@ -47,6 +47,18 @@ import pandas as pd
 import config
 from agents.mathematician import MathematicianAgent
 from agents.ai_manager    import AIManager, build_proposal
+from utils.indicators     import (
+    calc_atr,
+    market_regime,
+    price_above_ema200,
+    price_below_ema200,
+    is_prime_session,
+    is_weekday,
+    btc_is_dropping,
+    btc_is_rising,
+    candle_close_strength,
+    candle_close_weakness,
+)
 from agents.warden        import (
     WardenAgent,
     calculate_stop_loss_atr,
@@ -54,13 +66,7 @@ from agents.warden        import (
     calculate_take_profit,
     calculate_position_size,
     find_structural_sl_from_df,
-)
-from utils.candle_buffer   import BufferRegistry
-from utils.indicators     import (
-    calc_atr,
-    market_regime,
-    price_above_ema200,
-    is_prime_session,
+    find_structural_sl_short_from_df,
 )
 from utils.notifications  import Notifier
 from web.state            import bot_state
@@ -133,12 +139,14 @@ class ExecutionerAgent:
         if timeframe != config.SIGNAL_TIMEFRAME:
             return
 
-        # ── Session timing filter — best win rates 08:00-17:00 UTC ──────────
-        # Academic analysis of 1,940 crypto pairs confirms peak signal quality
-        # during London open + NY AM session. Outside this window we skip new
-        # entries (existing positions continue to be monitored by the warden).
+        # ── Session timing filter — active trading hours 06:00-20:00 UTC ───
         if not is_prime_session():
             log.debug("Outside prime session — skipping new entries for %s", symbol)
+            return
+
+        # ── Weekend filter — Sat/Sun have low volume & high false-positive rate ─
+        if not is_weekday():
+            log.debug("Weekend — skipping new entries for %s", symbol)
             return
 
         # ── Cooldown guard ────────────────────────────────────────────────────
@@ -209,32 +217,62 @@ class ExecutionerAgent:
         # ── Pre-compute common filters (15m HTF only — no 1h needed for scalping) ─
         htf_15m_df = await self._get_htf_df(symbol, "15m")
 
-        # EMA-50 on 15m: coin must be above it to take long entries
+        # EMA-50 on 15m: coin must be above it to take long entries, below for shorts
         htf_above_ema = price_above_ema200(htf_15m_df) if htf_15m_df is not None else True
+        htf_below_ema = price_below_ema200(htf_15m_df) if htf_15m_df is not None else True
 
         regime, adx, di_plus, di_minus = market_regime(symbol_df)
         atr = calc_atr(symbol_df)
         btc_df = await self._get_df(config.BTC_SYMBOL, config.BTC_TIMEFRAME)
 
+        # ── BTC sharp-drop / rise macro filter ───────────────────────────────
+        btc_dropping = btc_is_dropping(btc_df)
+        btc_rising   = btc_is_rising(btc_df)
+
         valid_signals = []
         for sig in strategy_signals:
             strategy = sig["strategy"]
-            log.info("🎯 Signal detected: %s [%s] strategy=%s — running pre-trade filters...", symbol, timeframe, strategy)
+            direction = sig.get("direction", "long")
+            log.info("🎯 Signal detected: %s [%s] strategy=%s dir=%s — running pre-trade filters...", symbol, timeframe, strategy, direction)
 
-            # All scalp/swing strategies require price above 15m EMA-50 and DI+ > DI-
-            if not htf_above_ema:
-                log.info("❌ HTF filter rejected %s (%s) — price BELOW 15m EMA-50", symbol, strategy)
-                continue
-            if config.ADX_REQUIRE_DIRECTION and di_minus >= di_plus:
-                log.info("❌ Direction rejected %s (%s) — DI- > DI+", symbol, strategy)
-                continue
+            if direction == "long":
+                if btc_dropping:
+                    log.info("❌ BTC drop filter rejected %s — paused long entries", symbol)
+                    continue
+                if not htf_above_ema:
+                    log.info("❌ HTF filter rejected %s (%s) — price BELOW 15m EMA-50", symbol, strategy)
+                    continue
+                if config.ADX_REQUIRE_DIRECTION and di_minus >= di_plus:
+                    log.info("❌ Direction rejected %s (%s) — DI- > DI+", symbol, strategy)
+                    continue
+            else:
+                if btc_rising:
+                    log.info("❌ BTC rise filter rejected %s — paused short entries", symbol)
+                    continue
+                if not htf_below_ema:
+                    log.info("❌ HTF filter rejected %s (%s) — price ABOVE 15m EMA-50", symbol, strategy)
+                    continue
+                if config.ADX_REQUIRE_DIRECTION and di_plus >= di_minus:
+                    log.info("❌ Direction rejected %s (%s) — DI+ > DI-", symbol, strategy)
+                    continue
+
             # Trend strategies also need minimum ADX momentum
-            if strategy in ("bounce", "breakout", "vwap_bounce", "momentum_scalp"):
+            if strategy in ("bounce", "breakout", "vwap_bounce", "momentum_scalp", "vwap_reject_short", "ema_cross_short", "momentum_short"):
                 if adx < config.ADX_TREND_THRESHOLD:
                     log.info("❌ ADX filter rejected %s (%s) — ADX=%.1f too low", symbol, strategy, adx)
                     continue
 
-            log.info("✅ Pre-trade filters passed for %s (strategy: %s)", symbol, strategy)
+            # Candle close strength (long) vs weakness (short)
+            conf_candle = sig.get("confirmation_candle", {})
+            if conf_candle:
+                if direction == "long" and not candle_close_strength(conf_candle):
+                    log.info("❌ Close-strength rejected %s (%s)", symbol, strategy)
+                    continue
+                if direction == "short" and not candle_close_weakness(conf_candle):
+                    log.info("❌ Close-weakness rejected %s (%s)", symbol, strategy)
+                    continue
+
+            log.info("✅ Pre-trade filters passed for %s (strategy: %s, dir: %s)", symbol, strategy, direction)
             valid_signals.append(sig)
 
         if not valid_signals:
@@ -242,6 +280,7 @@ class ExecutionerAgent:
 
         async def _eval_signal(sig):
             strategy = sig["strategy"]
+            direction = sig.get("direction", "long")
             conf_candle = sig["confirmation_candle"]
             entry_est = sig["entry_price"]
             swing_tp_math = sig.get("swing_tp_target")
@@ -254,23 +293,49 @@ class ExecutionerAgent:
             raw_sl = sig.get("stop_loss")
             if not raw_sl:
                 if atr > 0 and config.USE_STRUCTURAL_SL and htf_15m_df is not None:
-                    # Structural SL: anchored to 15m pivot lows — much harder to stop-hunt
-                    raw_sl = find_structural_sl_from_df(htf_15m_df, entry_est, atr)
+                    if direction == "long":
+                        raw_sl = find_structural_sl_from_df(htf_15m_df, entry_est, atr)
+                    else:
+                        raw_sl = find_structural_sl_short_from_df(htf_15m_df, entry_est, atr)
                     log.info("📐 Structural SL for %s: %.6g (15m pivot-based)", symbol, raw_sl)
                 elif atr > 0:
-                    raw_sl = calculate_stop_loss_atr(entry_est, atr)
+                    if direction == "long":
+                        raw_sl = calculate_stop_loss_atr(entry_est, atr)
+                    else:
+                        raw_sl = entry_est + atr * config.ATR_MULTIPLIER
                 else:
-                    raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
-                    
+                    if direction == "long":
+                        raw_sl = calculate_stop_loss(entry_est, conf_candle["low"])
+                    else:
+                        raw_sl = entry_est * (1.0 + config.MAX_SL_PCT / 2)
+
+            # Max SL% cap — skip trade if SL is too wide (volatile spike protection)
+            if raw_sl and entry_est > 0:
+                sl_pct = abs(entry_est - raw_sl) / entry_est * 100
+                if sl_pct > config.MAX_SL_PCT:
+                    log.info(
+                        "❌ SL too wide for %s (%s) — SL=%.2f%% > MAX %.2f%%",
+                        symbol, strategy, sl_pct, config.MAX_SL_PCT,
+                    )
+                    return
+
             raw_tp = sig.get("take_profit")
             tp_source = "strategy_default"
             if not raw_tp:
-                if swing_tp_math and swing_tp_math > entry_est:
-                    raw_tp = swing_tp_math
-                    tp_source = "swing_high"
+                if direction == "long":
+                    if swing_tp_math and swing_tp_math > entry_est:
+                        raw_tp = swing_tp_math
+                        tp_source = "swing_high"
+                    else:
+                        raw_tp = calculate_take_profit(entry_est, raw_sl)
+                        tp_source = "fixed_rr"
                 else:
-                    raw_tp = calculate_take_profit(entry_est, raw_sl)
-                    tp_source = "fixed_rr"
+                    if swing_tp_math and swing_tp_math < entry_est:
+                        raw_tp = swing_tp_math
+                        tp_source = "swing_low"
+                    else:
+                        raw_tp = entry_est - abs(entry_est - raw_sl) * config.MIN_RR_FALLBACK
+                        tp_source = "fixed_rr"
 
             proposal = build_proposal(
                 strategy=strategy,
@@ -341,6 +406,7 @@ class ExecutionerAgent:
             target_sl=best_sl,
             target_tp=best_tp,
             strategy=strategy,
+            direction=best_sig.get("direction", "long"),
             leverage=best_decision.get("leverage", 1),
             confidence=best_decision.get("confidence", 0.0),
         )
@@ -355,6 +421,7 @@ class ExecutionerAgent:
         target_sl: Optional[float] = None,
         target_tp: Optional[float] = None,
         strategy:  str = "bounce",
+        direction: str = "long",
         leverage:  int = 1,
         confidence: float = 0.0,
     ) -> None:
@@ -399,27 +466,37 @@ class ExecutionerAgent:
                 )
                 return
 
-            # ── Get current ask for limit price ──────────────────────────────
+            # ── Get current market price ──────────────────────────────
             ticker      = await self._exchange.fetch_ticker(symbol)
-            ask_price   = float(ticker.get("ask") or ticker.get("last") or 0.0)
-            if ask_price <= 0:
-                log.error("Invalid ask price for %s — aborting buy", symbol)
+            if direction == "long":
+                market_price = float(ticker.get("ask") or ticker.get("last") or 0.0)
+            else:
+                market_price = float(ticker.get("bid") or ticker.get("last") or 0.0)
+            
+            if market_price <= 0:
+                log.error("Invalid market price for %s — aborting", symbol)
                 return
 
             # ── SL / TP Calculation ──────────────────────────────────────────
             if target_sl is not None:
                 stop_loss = target_sl
             elif atr > 0:
-                stop_loss = calculate_stop_loss_atr(ask_price, atr)
+                stop_loss = calculate_stop_loss_atr(market_price, atr) if direction == "long" else market_price + atr * config.ATR_MULTIPLIER
             else:
-                stop_loss = calculate_stop_loss(ask_price, conf_candle["low"])
+                stop_loss = calculate_stop_loss(market_price, conf_candle["low"]) if direction == "long" else market_price * (1.0 + config.MAX_SL_PCT / 2)
 
             if target_tp is not None:
                 take_profit = target_tp
-            elif swing_tp and swing_tp > ask_price:
-                take_profit = swing_tp
+            elif direction == "long":
+                if swing_tp and swing_tp > market_price:
+                    take_profit = swing_tp
+                else:
+                    take_profit = calculate_take_profit(market_price, stop_loss)
             else:
-                take_profit = calculate_take_profit(ask_price, stop_loss)
+                if swing_tp and swing_tp < market_price:
+                    take_profit = swing_tp
+                else:
+                    take_profit = market_price - abs(market_price - stop_loss) * config.MIN_RR_FALLBACK
             
             # ── Futures Setup ────────────────────────────────────────────────
             if config.USE_FUTURES:
@@ -434,7 +511,7 @@ class ExecutionerAgent:
             effective_leverage = leverage if config.USE_FUTURES else 1
             quantity = calculate_position_size(
                 balance_usdt=usdt_free * effective_leverage,
-                entry_price=ask_price,
+                entry_price=market_price,
                 stop_loss=stop_loss,
             )
             if quantity <= 0:
@@ -445,9 +522,12 @@ class ExecutionerAgent:
             quantity = float(
                 self._exchange.amount_to_precision(symbol, quantity)
             )
-            # Add a 0.2% adaptive slippage buffer. This forces the limit order to heavily cross the 
-            # order book spread, acting essentially as a protected Market Buy to guarantee our bounce entry.
-            adaptive_limit = ask_price * 1.002
+            # Add a 0.2% adaptive slippage buffer.
+            if direction == "long":
+                adaptive_limit = market_price * 1.002
+            else:
+                adaptive_limit = market_price * 0.998
+                
             limit_price = float(
                 self._exchange.price_to_precision(symbol, adaptive_limit)
             )
@@ -458,16 +538,18 @@ class ExecutionerAgent:
             )
 
             # ── Place order ───────────────────────────────────────────────────
+            entry_side = "buy" if direction == "long" else "sell"
             if config.USE_FUTURES:
-                # Futures: use create_order with 'positionSide'='BOTH' for one-way mode
                 order = await self._exchange.create_order(
-                    symbol, "limit", "buy", quantity, limit_price,
+                    symbol, "limit", entry_side, quantity, limit_price,
                     params={"timeInForce": "GTC", "positionSide": "BOTH"},
                 )
             else:
-                order = await self._exchange.create_limit_buy_order(
-                    symbol, quantity, limit_price
-                )
+                if entry_side == "buy":
+                    order = await self._exchange.create_limit_buy_order(symbol, quantity, limit_price)
+                else:
+                    order = await self._exchange.create_limit_sell_order(symbol, quantity, limit_price)
+                    
             order_id = order["id"]
             log.info("Order placed: %s id=%s — waiting for fill...", symbol, order_id)
 
@@ -523,16 +605,22 @@ class ExecutionerAgent:
             if target_sl is not None:
                 stop_loss = target_sl
             elif atr > 0:
-                stop_loss = calculate_stop_loss_atr(filled_price, atr)
+                stop_loss = calculate_stop_loss_atr(filled_price, atr) if direction == "long" else filled_price + atr * config.ATR_MULTIPLIER
             else:
-                stop_loss = calculate_stop_loss(filled_price, conf_candle["low"])
+                stop_loss = calculate_stop_loss(filled_price, conf_candle["low"]) if direction == "long" else filled_price * (1.0 + config.MAX_SL_PCT / 2)
 
             if target_tp is not None:
                 take_profit = target_tp
-            elif swing_tp and swing_tp > filled_price:
-                take_profit = swing_tp
+            elif direction == "long":
+                if swing_tp and swing_tp > filled_price:
+                    take_profit = swing_tp
+                else:
+                    take_profit = calculate_take_profit(filled_price, stop_loss)
             else:
-                take_profit = calculate_take_profit(filled_price, stop_loss)
+                if swing_tp and swing_tp < filled_price:
+                    take_profit = swing_tp
+                else:
+                    take_profit = filled_price - abs(filled_price - stop_loss) * config.MIN_RR_FALLBACK
 
             # ── Register with Warden ──────────────────────────────────────────
             pos = self._warden.open_position(
@@ -544,6 +632,7 @@ class ExecutionerAgent:
                 strategy=strategy,
                 leverage=leverage if config.USE_FUTURES else 1,
                 is_futures=config.USE_FUTURES,
+                direction=direction,
             )
 
             # ── FIX: Synchronize Live SL/TP orders on Binance ────────────────
@@ -552,11 +641,13 @@ class ExecutionerAgent:
                 try:
                     sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
                     tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
+                    
+                    close_side = "sell" if direction == "long" else "buy"
 
                     # 1. Stop Loss Order
                     log.info("🎯 Placing live STOP_MARKET on Binance at %s", sl_price)
                     sl_order = await self._exchange.create_order(
-                        symbol, "STOP_MARKET", "sell", filled_qty,
+                        symbol, "STOP_MARKET", close_side, filled_qty,
                         params={
                             "stopPrice": sl_price,
                             "reduceOnly": True,
@@ -568,7 +659,7 @@ class ExecutionerAgent:
                     # 2. Take Profit Order
                     log.info("🎯 Placing live TAKE_PROFIT_MARKET on Binance at %s", tp_price)
                     tp_order = await self._exchange.create_order(
-                        symbol, "TAKE_PROFIT_MARKET", "sell", filled_qty,
+                        symbol, "TAKE_PROFIT_MARKET", close_side, filled_qty,
                         params={
                             "stopPrice": tp_price,
                             "reduceOnly": True,
@@ -737,31 +828,41 @@ class ExecutionerAgent:
             # Fallback: try reading from warden (may still exist for manual sells)
             pos = self._warden.get_position(symbol)
             quantity = pos.quantity if pos else 0.0
+            
+        pos = self._warden.get_position(symbol)
+        direction = pos.direction if pos else "long"
 
         if quantity <= 0:
-            log.warning("No quantity to sell for %s", symbol)
+            log.warning("No quantity to close for %s", symbol)
             return
 
         try:
             ticker    = await self._exchange.fetch_ticker(symbol)
-            bid_price = float(ticker.get("bid") or ticker.get("last") or exit_price)
+            if direction == "long":
+                close_price = float(ticker.get("bid") or ticker.get("last") or exit_price)
+                close_side = "sell"
+            else:
+                close_price = float(ticker.get("ask") or ticker.get("last") or exit_price)
+                close_side = "buy"
+
             qty_str   = float(self._exchange.amount_to_precision(symbol, quantity))
-            bid_str   = float(self._exchange.price_to_precision(symbol, bid_price))
+            price_str = float(self._exchange.price_to_precision(symbol, close_price))
 
             if config.USE_FUTURES:
-                # Futures: close a LONG by placing SELL on same positionSide
                 order = await self._exchange.create_order(
-                    symbol, "limit", "sell", qty_str, bid_str,
+                    symbol, "limit", close_side, qty_str, price_str,
                     params={"timeInForce": "GTC", "positionSide": "BOTH"},
                 )
             else:
-                order = await self._exchange.create_limit_sell_order(
-                    symbol, qty_str, bid_str
-                )
+                if close_side == "sell":
+                    order = await self._exchange.create_limit_sell_order(symbol, qty_str, price_str)
+                else:
+                    order = await self._exchange.create_limit_buy_order(symbol, qty_str, price_str)
+                    
             order_id = order["id"]
             log.info(
-                "📤 Limit Sell placed: %s qty=%.6g @ %.6g | id=%s",
-                symbol, qty_str, bid_str, order_id,
+                "📤 Limit Close placed: %s qty=%.6g @ %.6g | id=%s",
+                symbol, qty_str, price_str, order_id,
             )
 
             # Brief wait for fill (sells at bid usually fill fast)
@@ -776,25 +877,26 @@ class ExecutionerAgent:
                     break
 
             if order.get("status") != "closed":
-                # Fall back to market sell
+                # Fall back to market sell/buy
                 log.warning(
-                    "Limit sell timed out for %s — falling back to market sell",
+                    "Limit close timed out for %s — falling back to market close",
                     symbol,
                 )
                 await self._exchange.cancel_order(order_id, symbol)
                 if config.USE_FUTURES:
                     order = await self._exchange.create_order(
-                        symbol, "market", "sell", qty_str,
+                        symbol, "market", close_side, qty_str,
                         params={"positionSide": "BOTH"},
                     )
                 else:
-                    order = await self._exchange.create_market_sell_order(
-                        symbol, qty_str
-                    )
+                    if close_side == "sell":
+                        order = await self._exchange.create_market_sell_order(symbol, qty_str)
+                    else:
+                        order = await self._exchange.create_market_buy_order(symbol, qty_str)
 
-            filled = float(order.get("average") or order.get("price") or bid_price)
+            filled = float(order.get("average") or order.get("price") or close_price)
             log.info(
-                "💰 Sell confirmed: %s qty=%.6g @ %.6g | id=%s",
+                "💰 Close confirmed: %s qty=%.6g @ %.6g | id=%s",
                 symbol, qty_str, filled, order.get("id"),
             )
 

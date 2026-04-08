@@ -130,6 +130,10 @@ SWING_RR = float(_optional("SWING_RR", "2.0"))
 # formed AFTER entry, rather than a fixed +5 % price level
 BE_PIVOT_LOOKBACK = 10       # scan last N closed candles for post-entry pivot
 
+# Max SL distance as % of entry — prevents oversized losses on sudden volatility spikes.
+# If the computed SL is wider than this, the trade is skipped entirely.
+MAX_SL_PCT = float(_optional("MAX_SL_PCT", "0.8"))  # 0.8% max SL distance
+
 # Cooldown after SL hit — short cooldown for high-frequency scalping
 COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", "60"))
 
