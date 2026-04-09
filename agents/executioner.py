@@ -453,45 +453,19 @@ class ExecutionerAgent:
 
             # ── Place order ───────────────────────────────────────────────────
             entry_side = "buy" if direction == "long" else "sell"
-            _place_sl_tp_separately = False
             if config.USE_FUTURES:
-                sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
-                tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
-
-                # Validate SL/TP won't immediately trigger against limit_price
-                sl_tp_valid = True
-                if direction == "long":
-                    if sl_price >= limit_price:
-                        log.warning("SL %.6g >= entry %.6g for LONG %s — placing SL/TP separately", sl_price, limit_price, symbol)
-                        sl_tp_valid = False
-                    if tp_price <= limit_price:
-                        log.warning("TP %.6g <= entry %.6g for LONG %s — placing SL/TP separately", tp_price, limit_price, symbol)
-                        sl_tp_valid = False
-                else:
-                    if sl_price <= limit_price:
-                        log.warning("SL %.6g <= entry %.6g for SHORT %s — placing SL/TP separately", sl_price, limit_price, symbol)
-                        sl_tp_valid = False
-                    if tp_price >= limit_price:
-                        log.warning("TP %.6g >= entry %.6g for SHORT %s — placing SL/TP separately", tp_price, limit_price, symbol)
-                        sl_tp_valid = False
-
-                if sl_tp_valid:
-                    order = await self._exchange.create_order(
-                        symbol, "limit", entry_side, quantity, limit_price,
-                        params={
-                            "timeInForce": "GTC",
-                            "positionSide": "BOTH",
-                            "stopLossPrice": sl_price,
-                            "takeProfitPrice": tp_price
-                        },
-                    )
-                else:
-                    _place_sl_tp_separately = True
-                    order = await self._exchange.create_order(
-                        symbol, "limit", entry_side, quantity, limit_price,
-                        params={"timeInForce": "GTC", "positionSide": "BOTH"},
-                    )
+                # Always place SL/TP separately after fill to avoid
+                # Binance -2021 "Order would immediately trigger" errors.
+                # Binance validates embedded stopLossPrice/takeProfitPrice
+                # against the current mark price, which often drifts from
+                # both the AI's theoretical entry and our adaptive limit.
+                _place_sl_tp_separately = True
+                order = await self._exchange.create_order(
+                    symbol, "limit", entry_side, quantity, limit_price,
+                    params={"timeInForce": "GTC", "positionSide": "BOTH"},
+                )
             else:
+                _place_sl_tp_separately = False
                 if entry_side == "buy":
                     order = await self._exchange.create_limit_buy_order(symbol, quantity, limit_price)
                 else:
