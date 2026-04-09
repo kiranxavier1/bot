@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 from google import genai
 from google.genai import types
@@ -45,6 +46,70 @@ from utils.indicators import btc_trend, market_regime, calc_rsi, fetch_news_sent
 from web.state import bot_state
 
 log = logging.getLogger(__name__)
+
+
+# ── Truncated-JSON repair helper ──────────────────────────────────────────────
+
+def _repair_json(text: str) -> Optional[Dict[str, Any]]:
+    """
+    Attempt to repair a truncated JSON object returned by the LLM.
+
+    Common truncation patterns
+    --------------------------
+    • String cut mid-value  → `"confidence`  (missing closing quote)
+    • Value missing         → `"confidence":` (key present, no value)
+    • Array left open       → `["risk 1", "risk`
+    • Trailing comma        → `"risks": [],`  before we add closing braces
+
+    Returns the parsed dict on success, or None if repair fails.
+    """
+    if not text or "{" not in text:
+        return None
+
+    # Start from the first '{'
+    start = text.find("{")
+    text = text[start:]
+
+    # Remove trailing whitespace/commas
+    text = text.rstrip()
+    text = text.rstrip(",")
+
+    # If it already ends with '}' try parsing directly
+    if text.endswith("}"):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+    # ── Fix unterminated string at end ────────────────────────────────────
+    # Count unescaped quotes — if odd, close the open string
+    quote_count = len(re.findall(r'(?<!\\)"', text))
+    if quote_count % 2 == 1:
+        text += '"'
+
+    # ── Trim any dangling key ("key":  or  "key": "val  ) at the end ─────
+    # Remove incomplete key-value pair at the end
+    text = re.sub(r',\s*"[^"]*"\s*:\s*$', '', text)       # key with no value
+    text = re.sub(r',\s*"[^"]*"\s*$', '', text)           # dangling key name
+
+    # Remove trailing commas again after trimming
+    text = text.rstrip().rstrip(",")
+
+    # ── Close any open brackets/braces ────────────────────────────────────
+    open_braces   = text.count("{") - text.count("}")
+    open_brackets = text.count("[") - text.count("]")
+
+    if open_brackets > 0:
+        text += "]" * open_brackets
+    if open_braces > 0:
+        text += "}" * open_braces
+
+    try:
+        result = json.loads(text)
+        log.info("🔧 Repaired truncated JSON successfully")
+        return result
+    except json.JSONDecodeError:
+        return None
 
 
 # ── Trade proposal builder ────────────────────────────────────────────────────
@@ -296,19 +361,24 @@ If R:R ≥ 2.0 and at least 2 technical confirmations align, you TRADE.
 • Golden setups in golden_setups should boost confidence by +0.15.
 • Detected patterns from the code-level analysis (detected_patterns) are strong hints — weight them heavily.
 
-Respond ONLY with valid JSON (no markdown):
+CRITICAL OUTPUT RULES — you MUST follow these exactly:
+• Respond ONLY with valid JSON (no markdown, no trailing text).
+• "reasoning" must be ≤ 80 characters. Shorter is better.
+• "risks" must contain exactly 1 short string.
+• Keep total response under 250 tokens.
+
 {
   "decision":       "TRADE" or "PASS",
   "direction":      "long" or "short",
-  "entry_price":    <float — use current price from market_snapshot.price.current>,
+  "entry_price":    <float>,
   "stop_loss":      <float>,
   "take_profit":    <float>,
   "confidence":     <float 0.0–1.0>,
   "leverage":       <int 1–20>,
   "allocation_pct": <float 10.0–30.0>,
-  "strategy_used":  "<brief name: e.g. momentum_long, pullback_short, mean_reversion_long>",
-  "reasoning":      "<1 concise sentence>",
-  "risks":          ["<risk 1>"]
+  "strategy_used":  "<e.g. momentum_long>",
+  "reasoning":      "<≤80 chars>",
+  "risks":          ["<one risk>"]
 }
 """
 
@@ -451,12 +521,15 @@ class AIManager:
         if start != -1 and end > start:
             text = text[start:end]
 
+        data = None
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
-            log.warning(
-                "Failed to parse AI response as JSON: %s\nRaw: %r", exc, text
-            )
+            log.warning("AI response JSON broken, attempting repair: %s", exc)
+            data = _repair_json(text)
+
+        if data is None:
+            log.warning("Failed to parse/repair AI response. Raw: %r", text[:300])
             return {
                 "decision":   "REJECT",
                 "confidence": 0.0,
@@ -592,10 +665,15 @@ class AIManager:
         if start != -1 and end > start:
             text = text[start:end]
 
+        data = None
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
-            log.warning("Failed to parse proactive AI response: %s\nRaw: %r", exc, text)
+            log.warning("Proactive AI JSON broken, attempting repair: %s", exc)
+            data = _repair_json(text)
+
+        if data is None:
+            log.warning("Failed to parse/repair proactive AI response. Raw: %r", text[:300])
             return {
                 "decision":   "PASS",
                 "confidence": 0.0,

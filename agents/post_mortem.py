@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -265,6 +266,7 @@ Output ONLY valid JSON:
 }}"""
 
         try:
+            from agents.ai_manager import _repair_json
             response = await self._client.aio.models.generate_content(
                 model=config.GEMINI_MODEL,
                 contents=prompt,
@@ -280,7 +282,14 @@ Output ONLY valid JSON:
             if start != -1 and end > start:
                 raw = raw[start:end]
 
-            analysis = json.loads(raw)
+            try:
+                analysis = json.loads(raw)
+            except json.JSONDecodeError as parse_err:
+                log.warning("Post-mortem loss JSON broken, attempting repair: %s", parse_err)
+                analysis = _repair_json(raw)
+                if analysis is None:
+                    raise parse_err
+
             full_analysis = {
                 "trade_id":     trade_id,
                 "trade":        trade,
@@ -340,12 +349,14 @@ Output ONLY valid JSON:
 }}"""
 
         try:
+            from agents.ai_manager import _repair_json
             response = await self._client.aio.models.generate_content(
                 model=config.GEMINI_MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=self._system_instruction,
                     max_output_tokens=1000,
+                    response_mime_type="application/json",
                 )
             )
             raw = response.text.strip()
@@ -354,7 +365,14 @@ Output ONLY valid JSON:
             if start != -1 and end > start:
                 raw = raw[start:end]
 
-            analysis = json.loads(raw)
+            try:
+                analysis = json.loads(raw)
+            except json.JSONDecodeError as parse_err:
+                log.warning("Post-mortem win JSON broken, attempting repair: %s", parse_err)
+                analysis = _repair_json(raw)
+                if analysis is None:
+                    raise parse_err
+
             full_analysis = {
                 "trade_id":     trade_id,
                 "trade":        trade,
