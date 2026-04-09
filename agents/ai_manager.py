@@ -406,6 +406,7 @@ class AIManager:
                 config=types.GenerateContentConfig(
                     system_instruction=_SYSTEM_PROMPT,
                     max_output_tokens=600,
+                    response_mime_type="application/json",
                 )
             )
             raw_text = response.text.strip()
@@ -508,6 +509,7 @@ class AIManager:
                 config=types.GenerateContentConfig(
                     system_instruction=_PROACTIVE_SYSTEM_PROMPT,
                     max_output_tokens=1500,
+                    response_mime_type="application/json",
                 )
             )
             if not response.candidates:
@@ -558,6 +560,7 @@ class AIManager:
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     max_output_tokens=2000,
+                    response_mime_type="application/json",
                 )
             )
             # response.text raises if no candidates (blocked/empty response)

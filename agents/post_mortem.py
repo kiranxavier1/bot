@@ -271,6 +271,7 @@ Output ONLY valid JSON:
                 config=types.GenerateContentConfig(
                     system_instruction=self._system_instruction,
                     max_output_tokens=1000,
+                    response_mime_type="application/json",
                 )
             )
             raw = response.text.strip()
