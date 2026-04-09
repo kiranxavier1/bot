@@ -98,12 +98,13 @@ class ExecutionerAgent:
         warden:        WardenAgent,
         notifier:      Notifier,
     ) -> None:
-        self._exchange = exchange
-        self._registry = registry
-        self._math     = mathematician
-        self._ai       = ai_manager
-        self._warden   = warden
-        self._notifier = notifier
+        self._exchange             = exchange
+        self._registry             = registry
+        self._math                 = mathematician
+        self._ai                   = ai_manager
+        self._warden               = warden
+        self._notifier             = notifier
+        self._pending_evaluations: set = set()
 
     # ── Main entry point ──────────────────────────────────────────────────────
     async def on_candle_close(
