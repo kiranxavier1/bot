@@ -507,9 +507,12 @@ class AIManager:
                 contents=user_msg,
                 config=types.GenerateContentConfig(
                     system_instruction=_PROACTIVE_SYSTEM_PROMPT,
-                    max_output_tokens=600,
+                    max_output_tokens=1500,
                 )
             )
+            if not response.candidates:
+                log.warning("analyze_market: Gemini returned no candidates for %s", proposal.get("symbol"))
+                return {"decision": "PASS", "confidence": 0.0, "reasoning": "No candidates", "risks": []}
             raw_text = response.text.strip()
             decision = self._parse_proactive_decision(raw_text)
 
@@ -579,6 +582,8 @@ class AIManager:
     @staticmethod
     def _parse_proactive_decision(text: str) -> Dict[str, Any]:
         """Parse the proactive AI response (TRADE/PASS with full SL/TP)."""
+        # Strip markdown code fences Gemini sometimes wraps responses in
+        text = text.replace("```json", "").replace("```", "").strip()
         start = text.find("{")
         end   = text.rfind("}") + 1
         if start != -1 and end > start:

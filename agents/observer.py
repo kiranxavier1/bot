@@ -92,8 +92,21 @@ class ObserverAgent:
             if "reasoning" in response:
                 log.info("👁️‍🗨️ Observer Reasoning: %s", response["reasoning"])
 
+    # Hard limits the Observer cannot exceed — prevents it from killing trade flow
+    _OVERRIDE_LIMITS = {
+        "MIN_AI_CONFIDENCE":       (0.55, 0.70),   # never above 0.70 — kills all signals
+        "MAX_SL_PCT":              (0.5,  5.0),
+        "COOLDOWN_SECONDS":        (60,   600),
+        "MAX_CONCURRENT_POSITIONS":(2,    10),
+    }
+
     def _apply_overrides(self, new_cfg: dict) -> None:
         for key, val in new_cfg.items():
-            if hasattr(config, key):
-                setattr(config, key, val)
-                log.info("👁️‍🗨️ Observer forced config.%s = %s", key, val)
+            if not hasattr(config, key):
+                continue
+            # Clamp to allowed range if defined
+            if key in self._OVERRIDE_LIMITS:
+                lo, hi = self._OVERRIDE_LIMITS[key]
+                val = max(lo, min(hi, val))
+            setattr(config, key, val)
+            log.info("👁️‍🗨️ Observer forced config.%s = %s", key, val)
