@@ -715,17 +715,11 @@ def rsi_below_midline(df: pd.DataFrame, period: int = 7) -> bool:
 
 def is_prime_session() -> bool:
     """
-    True during active trading hours: 06:00-20:00 UTC.
-    Covers Asia close, London open, NY AM, and NY PM sessions.
-    Expanded from 08-17 to 06-20 to capture more valid trade setups daily.
-    Avoids the dead zone (00:00-06:00 UTC) where volume is lowest.
+    Always returns True — crypto trades 24/7.
+    The AI confidence filter and volume filter already reject low-quality setups,
+    so a hard time-of-day block only reduces trade frequency without improving quality.
     """
-    try:
-        from datetime import datetime, timezone
-        hour = datetime.now(timezone.utc).hour
-        return 6 <= hour < 20
-    except Exception:
-        return True   # fail-open
+    return True
 
 
 def is_weekday() -> bool:
