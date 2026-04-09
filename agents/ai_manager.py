@@ -554,19 +554,23 @@ class AIManager:
                 contents=user_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    max_output_tokens=800,
+                    max_output_tokens=2000,
                 )
             )
+            # response.text raises if no candidates (blocked/empty response)
+            if not response.candidates:
+                log.warning("Observer: Gemini returned no candidates — skipping audit")
+                return {}
             raw_text = response.text.strip()
-            
+
             start = raw_text.find("{")
             end   = raw_text.rfind("}") + 1
             if start != -1 and end > start:
                 raw_text = raw_text[start:end]
-                
+
             if not raw_text.strip():
                 return {}
-                
+
             return json.loads(raw_text)
         except Exception as exc:
             log.error("Observer API error: %s", exc)
