@@ -453,18 +453,44 @@ class ExecutionerAgent:
 
             # ── Place order ───────────────────────────────────────────────────
             entry_side = "buy" if direction == "long" else "sell"
+            _place_sl_tp_separately = False
             if config.USE_FUTURES:
                 sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
                 tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
-                order = await self._exchange.create_order(
-                    symbol, "limit", entry_side, quantity, limit_price,
-                    params={
-                        "timeInForce": "GTC", 
-                        "positionSide": "BOTH",
-                        "stopLossPrice": sl_price,
-                        "takeProfitPrice": tp_price
-                    },
-                )
+
+                # Validate SL/TP won't immediately trigger against limit_price
+                sl_tp_valid = True
+                if direction == "long":
+                    if sl_price >= limit_price:
+                        log.warning("SL %.6g >= entry %.6g for LONG %s — placing SL/TP separately", sl_price, limit_price, symbol)
+                        sl_tp_valid = False
+                    if tp_price <= limit_price:
+                        log.warning("TP %.6g <= entry %.6g for LONG %s — placing SL/TP separately", tp_price, limit_price, symbol)
+                        sl_tp_valid = False
+                else:
+                    if sl_price <= limit_price:
+                        log.warning("SL %.6g <= entry %.6g for SHORT %s — placing SL/TP separately", sl_price, limit_price, symbol)
+                        sl_tp_valid = False
+                    if tp_price >= limit_price:
+                        log.warning("TP %.6g >= entry %.6g for SHORT %s — placing SL/TP separately", tp_price, limit_price, symbol)
+                        sl_tp_valid = False
+
+                if sl_tp_valid:
+                    order = await self._exchange.create_order(
+                        symbol, "limit", entry_side, quantity, limit_price,
+                        params={
+                            "timeInForce": "GTC",
+                            "positionSide": "BOTH",
+                            "stopLossPrice": sl_price,
+                            "takeProfitPrice": tp_price
+                        },
+                    )
+                else:
+                    _place_sl_tp_separately = True
+                    order = await self._exchange.create_order(
+                        symbol, "limit", entry_side, quantity, limit_price,
+                        params={"timeInForce": "GTC", "positionSide": "BOTH"},
+                    )
             else:
                 if entry_side == "buy":
                     order = await self._exchange.create_limit_buy_order(symbol, quantity, limit_price)
@@ -556,9 +582,26 @@ class ExecutionerAgent:
                 direction=direction,
             )
 
-            # SL/TP orders were implicitly embedded via ccxt Unified params!
-            # So we don't need secondary REST requests here anymore, saving us
-            # from Naked Position latency exposure correctly.
+            # ── Place SL/TP separately if embedded approach was skipped ─────
+            if config.USE_FUTURES and _place_sl_tp_separately:
+                try:
+                    close_side = "sell" if direction == "long" else "buy"
+                    sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
+                    tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
+
+                    sl_order = await self._exchange.create_order(
+                        symbol, "STOP_MARKET", close_side, filled_qty,
+                        params={"stopPrice": sl_price, "reduceOnly": True, "positionSide": "BOTH"},
+                    )
+                    tp_order = await self._exchange.create_order(
+                        symbol, "TAKE_PROFIT_MARKET", close_side, filled_qty,
+                        params={"stopPrice": tp_price, "reduceOnly": True, "positionSide": "BOTH"},
+                    )
+                    pos.sl_order_id = sl_order.get("id")
+                    pos.tp_order_id = tp_order.get("id")
+                    log.info("✅ Separate SL/TP placed for %s: SL=%s TP=%s", symbol, sl_price, tp_price)
+                except Exception as sltp_exc:
+                    log.error("Failed to place separate SL/TP for %s: %s", symbol, sltp_exc)
 
             # ── Telegram notification ─────────────────────────────────────────
             await self._notifier.send(

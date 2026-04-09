@@ -508,7 +508,7 @@ class AIManager:
                 contents=user_msg,
                 config=types.GenerateContentConfig(
                     system_instruction=_PROACTIVE_SYSTEM_PROMPT,
-                    max_output_tokens=1500,
+                    max_output_tokens=2048,
                     response_mime_type="application/json",
                 )
             )
