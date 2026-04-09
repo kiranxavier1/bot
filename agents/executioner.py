@@ -586,6 +586,55 @@ class ExecutionerAgent:
             if config.USE_FUTURES and _place_sl_tp_separately:
                 try:
                     close_side = "sell" if direction == "long" else "buy"
+
+                    # Re-validate SL/TP geometry against the ACTUAL filled price
+                    # The AI's theoretical entry may differ significantly from fill
+                    sl_valid = True
+                    tp_valid = True
+                    if direction == "long":
+                        if stop_loss >= filled_price:
+                            log.warning(
+                                "SL %.6g >= filled %.6g for LONG %s — recalculating SL",
+                                stop_loss, filled_price, symbol,
+                            )
+                            stop_loss = filled_price * (1.0 - config.MAX_SL_PCT / 100.0)
+                            pos.stop_loss = stop_loss
+                        if take_profit <= filled_price:
+                            log.warning(
+                                "TP %.6g <= filled %.6g for LONG %s — recalculating TP",
+                                take_profit, filled_price, symbol,
+                            )
+                            take_profit = filled_price * (1.0 + (config.MAX_SL_PCT * config.MIN_RR_FALLBACK) / 100.0)
+                            pos.take_profit = take_profit
+                    else:  # short
+                        if stop_loss <= filled_price:
+                            log.warning(
+                                "SL %.6g <= filled %.6g for SHORT %s — recalculating SL",
+                                stop_loss, filled_price, symbol,
+                            )
+                            stop_loss = filled_price * (1.0 + config.MAX_SL_PCT / 100.0)
+                            pos.stop_loss = stop_loss
+                        if take_profit >= filled_price:
+                            log.warning(
+                                "TP %.6g >= filled %.6g for SHORT %s — recalculating TP",
+                                take_profit, filled_price, symbol,
+                            )
+                            take_profit = filled_price * (1.0 - (config.MAX_SL_PCT * config.MIN_RR_FALLBACK) / 100.0)
+                            pos.take_profit = take_profit
+
+                    # Also cap SL distance to MAX_SL_PCT
+                    sl_dist_pct = abs(filled_price - stop_loss) / filled_price * 100
+                    if sl_dist_pct > config.MAX_SL_PCT:
+                        log.warning(
+                            "SL distance %.2f%% > MAX %.2f%% for %s — clamping",
+                            sl_dist_pct, config.MAX_SL_PCT, symbol,
+                        )
+                        if direction == "long":
+                            stop_loss = filled_price * (1.0 - config.MAX_SL_PCT / 100.0)
+                        else:
+                            stop_loss = filled_price * (1.0 + config.MAX_SL_PCT / 100.0)
+                        pos.stop_loss = stop_loss
+
                     sl_price = float(self._exchange.price_to_precision(symbol, stop_loss))
                     tp_price = float(self._exchange.price_to_precision(symbol, take_profit))
 
