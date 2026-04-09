@@ -52,8 +52,6 @@ from utils.indicators     import (
     market_regime,
     price_above_ema200,
     price_below_ema200,
-    is_prime_session,
-    is_weekday,
     btc_is_dropping,
     btc_is_rising,
     candle_close_strength,
@@ -137,16 +135,6 @@ class ExecutionerAgent:
 
         # ── Only look for new entries on the signal timeframe (5m) ─────────────
         if timeframe != config.SIGNAL_TIMEFRAME:
-            return
-
-        # ── Session timing filter — active trading hours 06:00-20:00 UTC ───
-        if not is_prime_session():
-            log.debug("Outside prime session — skipping new entries for %s", symbol)
-            return
-
-        # ── Weekend filter — Sat/Sun have low volume & high false-positive rate ─
-        if not is_weekday():
-            log.debug("Weekend — skipping new entries for %s", symbol)
             return
 
         # ── Cooldown guard ────────────────────────────────────────────────────
