@@ -325,6 +325,28 @@ class BotState:
             await self._broadcast()
 
 
+    # ── Dashboard reset ───────────────────────────────────────────────────────
+    async def reset_dashboard(self) -> None:
+        """Wipe all trading history, stats, and P&L. Does NOT touch open positions."""
+        async with self._lock:
+            self._trades          = deque(maxlen=MAX_TRADES)
+            self._ai_log          = deque(maxlen=MAX_AI_LOG)
+            self._alerts          = deque(maxlen=MAX_ALERTS)
+            self._trade_analyses  = deque(maxlen=MAX_TRADES)
+            self._scan_log        = deque(maxlen=60)
+            self.live_pnl_usdt    = 0.0
+            self.stats = {
+                "total_trades":   0,
+                "wins":           0,
+                "losses":         0,
+                "win_rate":       0.0,
+                "total_pnl_pct":  0.0,
+                "ai_approved":    0,
+                "ai_rejected":    0,
+            }
+            self._save_to_disk()
+        await self._broadcast()
+
     # ── Bot meta ──────────────────────────────────────────────────────────────
     async def set_symbols_tracked(self, count: int) -> None:
         async with self._lock:

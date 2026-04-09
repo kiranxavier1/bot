@@ -55,7 +55,7 @@ GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL   = _optional("GEMINI_MODEL", "gemini-3.1-pro-preview")
 # 60%+ win rate mode: AI filters for quality, not just frequency.
 # Only high-conviction setups pass — this is the main win-rate lever.
-MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.50")) 
+MIN_AI_CONFIDENCE = float(_optional("MIN_AI_CONFIDENCE", "0.62"))
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = _optional("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = _optional("TELEGRAM_CHAT_ID", "")
@@ -76,7 +76,7 @@ TRENDLINE_MIN_SLOPE = float(_optional("TRENDLINE_MIN_SLOPE", "0.00005"))
 TRENDLINE_MAX_SLOPE = float(_optional("TRENDLINE_MAX_SLOPE", "0.015"))
 
 # Volume confirmation: require at least average volume — filters low-conviction moves
-VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "1.0"))
+VOLUME_CONFIRM_MULTIPLIER = float(_optional("VOLUME_CONFIRM_MULTIPLIER", "1.3"))
 VOLUME_LOOKBACK           = 20    # periods for average volume baseline
 
 # ── Risk management ───────────────────────────────────────────────────────────
@@ -133,8 +133,8 @@ BE_PIVOT_LOOKBACK = 10       # scan last N closed candles for post-entry pivot
 # If the computed SL is wider than this, the trade is skipped entirely.
 MAX_SL_PCT = float(_optional("MAX_SL_PCT", "3.0"))  # 3.0% max SL distance
 
-# Cooldown after SL hit — short cooldown for high-frequency scalping
-COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", "1"))
+# Cooldown after SL hit — 5 minutes prevents revenge trading on same symbol
+COOLDOWN_SECONDS = int(_optional("COOLDOWN_SECONDS", "300"))
 
 # Portfolio-level daily loss circuit breaker
 MAX_DAILY_LOSS_PCT = float(_optional("MAX_DAILY_LOSS_PCT", "0.50"))  # halt at -50 %
@@ -165,6 +165,22 @@ MIN_DAILY_RANGE_PCT = float(_optional("MIN_DAILY_RANGE_PCT", "3.0"))
 # Dashboard — throttle live price broadcast to avoid WS overload
 # P&L updates at most every N seconds per open position
 PRICE_UPDATE_THROTTLE_SECS = float(_optional("PRICE_UPDATE_THROTTLE_SECS", "2.0"))
+
+# ── Fees ──────────────────────────────────────────────────────────────────────
+# Binance Futures taker fee: 0.04% per side; 0.08% round-trip
+TAKER_FEE_PCT       = float(_optional("TAKER_FEE_PCT",       "0.0004"))
+ROUND_TRIP_FEE_PCT  = float(_optional("ROUND_TRIP_FEE_PCT",  "0.0008"))
+
+# ── Partial take-profit ────────────────────────────────────────────────────────
+# Close PARTIAL_TP_RATIO of the position when price reaches PARTIAL_TP_RR × SL-distance.
+# Remaining qty runs with SL moved to break-even.
+PARTIAL_TP_RR    = float(_optional("PARTIAL_TP_RR",   "1.0"))   # trigger at 1× R:R
+PARTIAL_TP_RATIO = float(_optional("PARTIAL_TP_RATIO", "0.5"))   # close 50% of position
+
+# ── Correlation filter ────────────────────────────────────────────────────────
+# Max number of open positions in the same direction (long or short)
+# when the macro trend is against them (BTC dropping for longs, rising for shorts).
+MAX_SAME_DIRECTION = int(_optional("MAX_SAME_DIRECTION", "3"))
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_LEVEL = _optional("LOG_LEVEL", "INFO").upper()

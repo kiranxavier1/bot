@@ -224,8 +224,26 @@ class ExecutionerAgent:
         btc_dropping = btc_is_dropping(btc_df)
         btc_rising   = btc_is_rising(btc_df)
 
-        # ── Concurrent position reservation (FIX #1) ──────────────────────────
+        # ── Concurrent position reservation ───────────────────────────────────
         if len(self._warden._positions) + len(self._pending_evaluations) >= config.MAX_CONCURRENT_POSITIONS:
+            return
+
+        # ── Correlation filter ────────────────────────────────────────────────
+        # Prevent piling into the same macro direction when the market is against us.
+        open_positions = list(self._warden._positions.values())
+        long_count  = sum(1 for p in open_positions if p.direction == "long")
+        short_count = sum(1 for p in open_positions if p.direction == "short")
+        if btc_dropping and long_count >= config.MAX_SAME_DIRECTION:
+            log.debug(
+                "Skipping %s — correlation filter: %d longs open while BTC dropping",
+                symbol, long_count,
+            )
+            return
+        if btc_rising and short_count >= config.MAX_SAME_DIRECTION:
+            log.debug(
+                "Skipping %s — correlation filter: %d shorts open while BTC rising",
+                symbol, short_count,
+            )
             return
 
         self._pending_evaluations.add(symbol)
@@ -660,6 +678,27 @@ class ExecutionerAgent:
                     pnl_pct=pnl_pct,
                 )
             )
+
+        elif result == "PARTIAL_TP":
+            pos = self._warden.get_position(symbol)
+            if pos and pos.quantity > 0:
+                partial_qty = pos.quantity * config.PARTIAL_TP_RATIO
+                partial_qty = float(self._exchange.amount_to_precision(symbol, partial_qty))
+                if partial_qty > 0:
+                    pos.quantity -= partial_qty   # update remaining before sell
+                    await self._execute_sell(symbol, pos.partial_tp_price, quantity=partial_qty)
+                    pnl_pct = (pos.partial_tp_price - pos.entry_price) / pos.entry_price * 100
+                    if pos.direction == "short":
+                        pnl_pct = -pnl_pct
+                    await self._notifier.send(
+                        f"🎯 <b>Partial TP</b> <code>{symbol}</code> — "
+                        f"closed {config.PARTIAL_TP_RATIO*100:.0f}% at <code>{pos.partial_tp_price:.6g}</code> "
+                        f"(+{pnl_pct:.2f}%) | SL → break-even ✅"
+                    )
+                    asyncio.create_task(bot_state.push_breakeven_activated(
+                        symbol=symbol, new_sl=pos.entry_price,
+                        sl_order_id=pos.sl_order_id, be_activated=True,
+                    ))
 
         elif result in ("TSL", "BE"):
             pos = self._warden.get_position(symbol)

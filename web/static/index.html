@@ -783,6 +783,44 @@ function StrategyLearningPanel() {
   );
 }
 
+// ── Reset Confirmation Modal ───────────────────────────────────────────────
+function ResetModal({ onConfirm, onCancel }) {
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth:'420px'}}>
+        <div className="modal-header">
+          <span className="modal-title" style={{color:'var(--red)'}}>
+            ⚠️ Reset Dashboard
+          </span>
+          <button className="modal-close" onClick={onCancel}>✖</button>
+        </div>
+        <div className="modal-body">
+          <p style={{marginBottom:'16px', lineHeight:'1.6'}}>
+            This will permanently wipe:
+          </p>
+          <ul style={{paddingLeft:'20px', lineHeight:'2', color:'var(--muted)', fontSize:'13px', marginBottom:'20px'}}>
+            <li>All trade history</li>
+            <li>Win rate &amp; P&amp;L stats</li>
+            <li>AI decision log</li>
+            <li>Alerts &amp; scan log</li>
+          </ul>
+          <p style={{fontSize:'12px', color:'var(--muted)', marginBottom:'20px'}}>
+            Open positions are <strong>not</strong> affected.
+          </p>
+          <div style={{display:'flex', gap:'12px', justifyContent:'flex-end'}}>
+            <button onClick={onCancel} style={{padding:'10px 20px', borderRadius:'6px', border:'1px solid var(--border)', background:'var(--surface)', cursor:'pointer', fontWeight:600}}>
+              Cancel
+            </button>
+            <button onClick={onConfirm} style={{padding:'10px 20px', borderRadius:'6px', border:'none', background:'var(--red)', color:'#fff', cursor:'pointer', fontWeight:600}}>
+              Reset Everything
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Settings Panel ────────────────────────────────────────────────────────
 function SettingsPanel({ tradeAllocationPct }) {
   const [val, setVal] = useState(tradeAllocationPct || 5);
@@ -790,6 +828,8 @@ function SettingsPanel({ tradeAllocationPct }) {
   const [updateStatus, setUpdateStatus] = useState('idle');
   const [testStatus, setTestStatus]   = useState('idle');   // idle | loading
   const [testResult, setTestResult]   = useState(null);     // last test result
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetStatus, setResetStatus] = useState('idle');   // idle | loading | success
   
   useEffect(() => {
     if (tradeAllocationPct) setVal(tradeAllocationPct);
@@ -825,6 +865,18 @@ function SettingsPanel({ tradeAllocationPct }) {
     }
   };
 
+  const handleReset = async () => {
+    setShowResetModal(false);
+    setResetStatus('loading');
+    try {
+      await fetch('/api/dashboard/reset', { method: 'POST' });
+      setResetStatus('success');
+      setTimeout(() => setResetStatus('idle'), 3000);
+    } catch {
+      setResetStatus('idle');
+    }
+  };
+
   const handleTestTrade = async () => {
     setTestStatus('loading');
     setTestResult(null);
@@ -840,6 +892,7 @@ function SettingsPanel({ tradeAllocationPct }) {
   };
 
   return (
+    <>
     <div className="panel panel-full" style={{marginBottom: '24px'}}>
       <div className="panel-header">
         <span className="panel-title">
@@ -940,8 +993,40 @@ function SettingsPanel({ tradeAllocationPct }) {
           </button>
         </div>
 
+        <hr style={{border: 'none', borderTop: '1px solid var(--border)', margin: '20px 0'}} />
+
+        <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
+          <div style={{flex: 1}}>
+            <div style={{fontWeight:600, fontSize:'14px', marginBottom:'10px', color:'var(--red)'}}>🗑️ Reset Dashboard</div>
+            <div style={{color:'var(--muted)', fontSize:'12px'}}>
+              Permanently wipes all trade history, win rate, P&amp;L, and AI logs. Open positions are not affected.
+            </div>
+          </div>
+          <button
+            onClick={() => setShowResetModal(true)}
+            disabled={resetStatus === 'loading'}
+            style={{
+              background: resetStatus === 'success' ? 'var(--green)' : 'var(--red-bg)',
+              color: resetStatus === 'success' ? '#fff' : 'var(--red)',
+              border: '1px solid var(--red)',
+              padding:'12px 24px', borderRadius:'6px', fontWeight:600,
+              cursor: resetStatus === 'loading' ? 'not-allowed' : 'pointer',
+              minWidth:'160px', transition:'background 0.3s ease'
+            }}
+          >
+            {resetStatus === 'loading' ? 'Resetting...' : resetStatus === 'success' ? '✓ Cleared!' : '🗑️ Reset Dashboard'}
+          </button>
+        </div>
+
       </div>
     </div>
+    {showResetModal && (
+      <ResetModal
+        onConfirm={handleReset}
+        onCancel={() => setShowResetModal(false)}
+      />
+    )}
+    </>
   );
 }
 

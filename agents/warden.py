@@ -60,6 +60,10 @@ class Position:
     # Tracks the highest close seen since entry — used for ATR trailing SL
     highest_close_since_entry: float = 0.0
 
+    # Partial TP tracking
+    partial_tp_done:  bool  = False
+    partial_tp_price: float = 0.0   # price at 1×R:R — computed on open
+
     # Exchange order IDs for synchronization
     sl_order_id: Optional[str] = None
     tp_order_id: Optional[str] = None
@@ -269,13 +273,13 @@ def calculate_take_profit(
     rr_ratio:    float = None,
 ) -> float:
     """
-    Fixed RR take-profit: entry + SL_distance × rr_ratio.
-    Used as fallback when no swing-high TP target is available.
-    Default RR = config.MIN_RR_FALLBACK (1.5).
+    Fixed RR take-profit: entry + SL_distance × rr_ratio, adjusted for fees.
+    Adding ROUND_TRIP_FEE_PCT ensures the net R:R (after entry+exit fees) hits target.
     """
     rr_ratio = rr_ratio if rr_ratio is not None else config.MIN_RR_FALLBACK
     sl_dist  = abs(entry_price - stop_loss)
-    return entry_price + sl_dist * rr_ratio
+    fee_adj  = entry_price * config.ROUND_TRIP_FEE_PCT
+    return entry_price + sl_dist * rr_ratio + fee_adj
 
 
 def calculate_position_size(
@@ -386,6 +390,13 @@ class WardenAgent:
         is_futures:  bool = False,
         direction:   str = "long",
     ) -> Position:
+        # Compute partial-TP trigger price (1×R:R from entry)
+        sl_dist = abs(entry_price - stop_loss)
+        if direction == "short":
+            partial_tp_price = entry_price - sl_dist * config.PARTIAL_TP_RR
+        else:
+            partial_tp_price = entry_price + sl_dist * config.PARTIAL_TP_RR
+
         pos = Position(
             symbol=symbol,
             entry_price=entry_price,
@@ -397,6 +408,7 @@ class WardenAgent:
             is_futures=is_futures,
             direction=direction,
             highest_close_since_entry=entry_price,
+            partial_tp_price=partial_tp_price,
         )
         self._positions[symbol] = pos
         log.info(
@@ -534,6 +546,25 @@ class WardenAgent:
                 )
 
             return "SL"
+
+        # ── Partial Take Profit (1×R:R → close PARTIAL_TP_RATIO, move SL to BE) ──
+        if not pos.partial_tp_done and pos.partial_tp_price > 0:
+            partial_hit = (
+                (latest_low  <= pos.partial_tp_price) if pos.direction == "short"
+                else (latest_high >= pos.partial_tp_price)
+            )
+            if partial_hit:
+                pos.partial_tp_done = True
+                pos.stop_loss       = pos.entry_price   # move SL to break-even
+                pos.be_activated    = True
+                log.info(
+                    "🎯 PARTIAL TP: %s hit 1×R:R at %.6g — closing %.0f%%, SL → break-even %.6g",
+                    symbol, pos.partial_tp_price, config.PARTIAL_TP_RATIO * 100, pos.entry_price,
+                )
+                asyncio.create_task(bot_state.push_breakeven_activated(
+                    symbol=symbol, new_sl=pos.entry_price, be_activated=True,
+                ))
+                return "PARTIAL_TP"
 
         # ── Take Profit ──────────────────────────────────────────────────────
         tp_hit = (latest_low <= pos.take_profit) if pos.direction == "short" else (latest_high >= pos.take_profit)
